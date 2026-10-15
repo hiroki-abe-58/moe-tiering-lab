@@ -1,0 +1,198 @@
+{
+  "order": [
+    "t26",
+    "t18",
+    "t10",
+    "t10",
+    "t18",
+    "t26",
+    "t26",
+    "t18",
+    "t10"
+  ],
+  "common": {},
+  "conditions": {
+    "t26": {
+      "STRATA_GLM_RAM_GB": "26"
+    },
+    "t18": {
+      "STRATA_GLM_RAM_GB": "18"
+    },
+    "t10": {
+      "STRATA_GLM_RAM_GB": "10"
+    }
+  },
+  "runs": [
+    {
+      "cond": "t26",
+      "round": 0,
+      "ram_tier_gb": 25.99,
+      "decode_tok_s": 11.2,
+      "prefill": {
+        "2048": 276.0,
+        "8192": 1049.0
+      },
+      "disk_ms_tok": 39.24,
+      "disk_waits_tok": 19.35,
+      "disk_reads_tok": 27.55,
+      "disk_ms_per_wait": 2.047370557019639,
+      "disk_share": 0.533442088091354,
+      "vram_hit_pct": 64.03,
+      "ram_fetches_tok": 30.31,
+      "cpu_lane_ms_tok": 3.05,
+      "seconds": 175.0
+    },
+    {
+      "cond": "t18",
+      "round": 0,
+      "ram_tier_gb": 18.0,
+      "decode_tok_s": 8.8,
+      "prefill": {
+        "2048": 226.0,
+        "8192": 867.0
+      },
+      "disk_ms_tok": 55.01,
+      "disk_waits_tok": 23.98,
+      "disk_reads_tok": 38.73,
+      "disk_ms_per_wait": 2.395350594094112,
+      "disk_share": 0.623165851489551,
+      "vram_hit_pct": 64.35,
+      "ram_fetches_tok": 24.92,
+      "cpu_lane_ms_tok": 2.22,
+      "seconds": 197.5
+    },
+    {
+      "cond": "t10",
+      "round": 0,
+      "ram_tier_gb": 9.99,
+      "decode_tok_s": 6.9,
+      "prefill": {
+        "2048": 190.0,
+        "8192": 729.0
+      },
+      "disk_ms_tok": 72.72,
+      "disk_waits_tok": 27.44,
+      "disk_reads_tok": 51.05,
+      "disk_ms_per_wait": 2.924601378335264,
+      "disk_share": 0.7064309306392073,
+      "vram_hit_pct": 64.32,
+      "ram_fetches_tok": 16.41,
+      "cpu_lane_ms_tok": 1.35,
+      "seconds": 228.1
+    },
+    {
+      "cond": "t10",
+      "round": 1,
+      "ram_tier_gb": 9.99,
+      "decode_tok_s": 7.1,
+      "prefill": {
+        "2048": 191.0,
+        "8192": 733.0
+      },
+      "disk_ms_tok": 72.32,
+      "disk_waits_tok": 27.44,
+      "disk_reads_tok": 51.05,
+      "disk_ms_per_wait": 2.9448507186400685,
+      "disk_share": 0.7056986729117876,
+      "vram_hit_pct": 64.58,
+      "ram_fetches_tok": 16.41,
+      "cpu_lane_ms_tok": 1.35,
+      "seconds": 228.0
+    },
+    {
+      "cond": "t18",
+      "round": 1,
+      "ram_tier_gb": 18.0,
+      "decode_tok_s": 8.8,
+      "prefill": {
+        "2048": 226.0,
+        "8192": 866.0
+      },
+      "disk_ms_tok": 55.21,
+      "disk_waits_tok": 23.98,
+      "disk_reads_tok": 38.73,
+      "disk_ms_per_wait": 2.3990266647326877,
+      "disk_share": 0.6227484989993329,
+      "vram_hit_pct": 64.35,
+      "ram_fetches_tok": 24.92,
+      "cpu_lane_ms_tok": 2.23,
+      "seconds": 197.9
+    },
+    {
+      "cond": "t26",
+      "round": 1,
+      "ram_tier_gb": 25.99,
+      "decode_tok_s": 11.2,
+      "prefill": {
+        "2048": 276.0,
+        "8192": 1048.0
+      },
+      "disk_ms_tok": 40.7,
+      "disk_waits_tok": 19.5,
+      "disk_reads_tok": 28.52,
+      "disk_ms_per_wait": 2.0645300833763893,
+      "disk_share": 0.5446509814116729,
+      "vram_hit_pct": 64.13,
+      "ram_fetches_tok": 31.33,
+      "cpu_lane_ms_tok": 3.12,
+      "seconds": 176.8
+    },
+    {
+      "cond": "t26",
+      "round": 2,
+      "ram_tier_gb": 25.99,
+      "decode_tok_s": 11.2,
+      "prefill": {
+        "2048": 275.0,
+        "8192": 1046.0
+      },
+      "disk_ms_tok": 39.24,
+      "disk_waits_tok": 19.8,
+      "disk_reads_tok": 27.45,
+      "disk_ms_per_wait": 2.065311004784689,
+      "disk_share": 0.5324287652645862,
+      "vram_hit_pct": 64.17,
+      "ram_fetches_tok": 31.44,
+      "cpu_lane_ms_tok": 3.11,
+      "seconds": 176.3
+    },
+    {
+      "cond": "t18",
+      "round": 2,
+      "ram_tier_gb": 18.0,
+      "decode_tok_s": 8.8,
+      "prefill": {
+        "2048": 226.0,
+        "8192": 865.0
+      },
+      "disk_ms_tok": 55.01,
+      "disk_waits_tok": 23.98,
+      "disk_reads_tok": 38.73,
+      "disk_ms_per_wait": 2.395350594094112,
+      "disk_share": 0.6231546231546231,
+      "vram_hit_pct": 64.35,
+      "ram_fetches_tok": 24.92,
+      "cpu_lane_ms_tok": 2.21,
+      "seconds": 197.9
+    },
+    {
+      "cond": "t10",
+      "round": 2,
+      "ram_tier_gb": 9.99,
+      "decode_tok_s": 6.9,
+      "prefill": {
+        "2048": 190.0,
+        "8192": 735.0
+      },
+      "disk_ms_tok": 72.78,
+      "disk_waits_tok": 27.44,
+      "disk_reads_tok": 51.05,
+      "disk_ms_per_wait": 2.926534665650064,
+      "disk_share": 0.7046862896979086,
+      "vram_hit_pct": 64.32,
+      "ram_fetches_tok": 16.41,
+      "cpu_lane_ms_tok": 1.34,
+      "seconds": 228.0
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+# build outputs and caches
+build/
+__pycache__/
+*.pyc
+*.exe
+*.obj
+*.pdb
+
+# scratch and local progress notes (contain local paths)
+.scratch/
+CLAUDE.md
+logs/
+
+# never publish model weights or raw logs
+*.gguf
+*.safetensors
+*.bin
+*.pack
+raw/

@@ -1,0 +1,113 @@
+﻿{
+    "collected_utc":  "2026-10-15T12:19:04Z",
+    "os":  {
+               "caption":  "Microsoft Windows 11 Pro",
+               "build":  "26200",
+               "version":  "10.0.26200"
+           },
+    "cpu":  {
+                "name":  "Intel(R) Core(TM) Ultra 9 285K",
+                "cores":  24,
+                "logical":  24,
+                "smt":  false
+            },
+    "ram":  {
+                "total_gb":  63.4,
+                "avail_gb":  14.5,
+                "commit_limit_gb":  88.5,
+                "commit_avail_gb":  2.2,
+                "modules":  [
+                                {
+                                    "gb":  16,
+                                    "speed_mts":  5600,
+                                    "configured_mts":  5600
+                                },
+                                {
+                                    "gb":  16,
+                                    "speed_mts":  5600,
+                                    "configured_mts":  5600
+                                },
+                                {
+                                    "gb":  16,
+                                    "speed_mts":  5600,
+                                    "configured_mts":  5600
+                                },
+                                {
+                                    "gb":  16,
+                                    "speed_mts":  5600,
+                                    "configured_mts":  5600
+                                }
+                            ]
+            },
+    "pagefile":  {
+                     "system_managed":  true,
+                     "files":  [
+                                   {
+                                       "name":  "C:\\pagefile.sys",
+                                       "allocated_mb":  25673,
+                                       "current_use_mb":  1034,
+                                       "peak_use_mb":  1257
+                                   }
+                               ],
+                     "custom":  [
+
+                                ]
+                 },
+    "security":  {
+                     "hypervisor_present":  true,
+                     "vbs_status":  2,
+                     "services_running":  [
+                                              2
+                                          ]
+                 },
+    "gpus":  [
+                 {
+                     "name":  "NVIDIA GeForce RTX 5090",
+                     "driver":  "610.88",
+                     "vram_total_mib":  32607,
+                     "vram_used_mib":  30584,
+                     "pcie_gen_now":  "5",
+                     "pcie_gen_max":  "5",
+                     "pcie_width_now":  "16",
+                     "pcie_width_max":  "16",
+                     "driver_model":  "WDDM"
+                 }
+             ],
+    "physical_disks":  [
+                           {
+                               "model":  "WDC WD20EZBX-60AYRA0",
+                               "interface":  "IDE",
+                               "size_gb":  1863
+                           },
+                           {
+                               "model":  "WD_BLACK SN850X HS 8000GB",
+                               "interface":  "SCSI",
+                               "size_gb":  7452
+                           },
+                           {
+                               "model":  "PC SN8000S SDEPNRG-2T00-1006",
+                               "interface":  "SCSI",
+                               "size_gb":  1908
+                           }
+                       ],
+    "volumes":  [
+                    {
+                        "drive":  "C:",
+                        "fs":  "NTFS",
+                        "size_gb":  1906,
+                        "free_gb":  975.3
+                    },
+                    {
+                        "drive":  "D:",
+                        "fs":  "NTFS",
+                        "size_gb":  1863,
+                        "free_gb":  1862.8
+                    },
+                    {
+                        "drive":  "E:",
+                        "fs":  "NTFS",
+                        "size_gb":  7452,
+                        "free_gb":  5058.1
+                    }
+                ]
+}
