@@ -16,7 +16,7 @@ and what the measurements said.
 | Where does a decode token go? | **~54%** is waiting for the SSD (19.5 waits/token x 2.07 ms). Default decode 11.3-11.7 tokens/s, prefill ~1050 tokens/s at 8K. |
 | Does P-core / E-core placement of the CPU lane help on a Core Ultra 9 285K? | **No.** Five arms x 3 interleaved runs: +1.8% (just fewer threads) to -7.1% (P-cores only). No pull request made. |
 | What moves the number? | **RAM-tier size.** 10 / 18 / 26 GB tier -> 6.9 / 8.8 / 11.2 tokens/s. On Windows the page file bounds the tier (commit limit); here it was ~21-26 GB. |
-| Is there a "WDDM caps pinned RAM at ~70%" limit? ([Maya #185](https://github.com/mw00/project-maya/issues/185)) | **Not on this PC:** 44.5 GB (70.2% of RAM) pinned with no refusal on an RTX 5090, VBS/HVCI on. Pinned memory is charged to the commit limit 1:1. |
+| Is there a "WDDM caps pinned RAM at ~70%" limit? ([Maya #185](https://github.com/mw00/project-maya/issues/185)) | **Unproven either way.** All that was shown: 44.5 GB (70.2% of RAM) was pinned with no refusal on an RTX 5090, VBS/HVCI on; the probe stopped because free RAM ran out, so a cap above 44.5 GB is neither shown nor excluded. Pinned memory is charged to the commit limit 1:1. |
 
 Not tested (see findings): output equality between arms, a larger page file / tier above 26 GB, 64K+ context, Linux, AMD,
 other CPUs. The gain from a larger tier is only extrapolated, not measured.

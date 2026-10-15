@@ -1,0 +1,29 @@
+**********************
+Windows PowerShell トランスクリプト開始
+開始時刻: 20261015221007
+ユーザー名: <host>\<user>
+RunAs ユーザー: <host>\<user>
+構成名: 
+コンピューター: <host> (Microsoft Windows NT 10.0.26200.0)
+ホスト アプリケーション: C:\windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command Start-Transcript -Path 'E:\oss\moe-tiering-lab\results\phase2\pagefile-apply.log' -Force | Out-Null; try { & 'E:\oss\moe-tiering-lab\scripts\pagefile_set.ps1' -SizeMB 49152 -StateFile 'E:\oss\moe-tiering-lab\results\phase2\state-before-apply.json' } catch { Write-Host ('ERROR: ' + $_.Exception.Message) }; Stop-Transcript | Out-Null
+プロセス ID: 36332
+PSVersion: 5.1.26100.9711
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.9711
+BuildVersion: 10.0.26100.9711
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+State saved to E:\oss\moe-tiering-lab\results\phase2\state-before-apply.json
+Automatic page file management: off
+
+Name            InitialSize MaximumSize
+----            ----------- -----------
+C:\pagefile.sys       49152       49152
+Done. C:\pagefile.sys will be 49152 MB after the next restart. NOTHING was restarted.
+**********************
+Windows PowerShell トランスクリプト終了
+終了時刻: 20261015221106
+**********************

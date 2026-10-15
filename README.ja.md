@@ -14,7 +14,7 @@ GLM-5.3-Flash）を動かしたときの、測定・ツール・**否定的な�
 | decode の1トークンの時間はどこに使われるか | **約54%がSSD待ち**（19.5回/トークン × 2.07ms）。既定で decode 11.3〜11.7 tok/s、8K prefill 約1050 tok/s。 |
 | Core Ultra 9 285K で CPU lane の P/E コア配置は効くか | **効かない。** 5条件×交互3回: +1.8%（スレッド数を減らしただけ）〜 −7.1%（Pコアのみ）。PRは作成していません。 |
 | 何が効くか | **RAM tier のサイズ。** 10 / 18 / 26 GB → 6.9 / 8.8 / 11.2 tok/s。Windowsではページファイル（commit limit）が tier の上限になり、この PC では約21〜26GBでした。 |
-| 「WDDMはピン留めRAMを約70%に制限する」は成り立つか（[Maya #185](https://github.com/mw00/project-maya/issues/185)） | **この PC では成り立たない:** RTX 5090・VBS/HVCI有効で 44.5GB（RAMの70.2%）を拒否なしでピン留め。ピン留めメモリは commit limit に 1:1 で課金されます。 |
+| 「WDDMはピン留めRAMを約70%に制限する」は成り立つか（[Maya #185](https://github.com/mw00/project-maya/issues/185)） | **どちらとも証明されていません。** 示せたのは「RTX 5090・VBS/HVCI有効で 44.5GB（RAMの70.2%）を拒否なしでピン留めできた」ことだけです。空きRAMが尽きて停止したため、44.5GB超の上限は存在も不在も確認できていません。ピン留めメモリは commit limit に 1:1 で課金されます。 |
 
 未検証（findings 参照）: 条件間の出力一致、大きいページファイル／26GB超のtier、64K以上のコンテキスト、Linux、AMD、他のCPU。
 tier を大きくしたときの利得は外挿であり、実測ではありません。

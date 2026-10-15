@@ -1,0 +1,55 @@
+﻿{
+    "label":  "before-pagefile-change",
+    "collected_utc":  "2026-10-15T13:08:56Z",
+    "is_admin":  false,
+    "ram_total_gb":  63.39,
+    "ram_free_gb":  13.64,
+    "commit_limit_gb":  89.47,
+    "committed_gb":  87.81,
+    "commit_available_gb":  1.66,
+    "vram_used_mib":  31167,
+    "vram_total_mib":  32607,
+    "automatic_managed_pagefile":  true,
+    "registry_PagingFiles":  [
+                                 "?:\\pagefile.sys"
+                             ],
+    "registry_ExistingPageFiles":  [
+                                       "\\??\\C:\\pagefile.sys"
+                                   ],
+    "pagefile_usage":  [
+                           {
+                               "name":  "C:\\pagefile.sys",
+                               "allocated_mb":  26705,
+                               "current_mb":  1030,
+                               "peak_mb":  1257
+                           }
+                       ],
+    "pagefile_setting":  [
+
+                         ],
+    "crash_control":  {
+                          "CrashDumpEnabled":  3,
+                          "DumpFile":  "C:\\windows\\MEMORY.DMP",
+                          "AutoReboot":  1,
+                          "Overwrite":  1,
+                          "DedicatedDumpFile":  null
+                      },
+    "clear_pagefile_at_shutdown":  0,
+    "volumes":  [
+                    {
+                        "drive":  "C:",
+                        "size_gb":  1906,
+                        "free_gb":  975.2
+                    },
+                    {
+                        "drive":  "D:",
+                        "size_gb":  1863,
+                        "free_gb":  1862.8
+                    },
+                    {
+                        "drive":  "E:",
+                        "size_gb":  7452,
+                        "free_gb":  5058.1
+                    }
+                ]
+}

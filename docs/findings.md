@@ -73,7 +73,7 @@ through `cudaHostAlloc`, outside Maya:
 | 1 GiB | 30.0 GB | 3.6 s | my `--max-gb 30` | 16.7 GB |
 | 512 MiB | **44.5 GB (70.2% of 63.4 GB)** | 5.9 s | my `--max-gb 44.5` | 2.1 GB |
 
-- No refusal up to 44.5 GB on RTX 5090 (WDDM), driver 610.88, Windows 11 26200, **with VBS and HVCI running** (the same
+- No refusal up to 44.5 GB (**the only thing established**) on RTX 5090 (WDDM), driver 610.88, Windows 11 26200, **with VBS and HVCI running** (the same
   as #185's PC). The probe stopped because free RAM was almost gone, not because the driver said no; whether a cap sits
   above 44.5 GB on this PC is **not known**.
 - Pinned memory was charged to the commit limit **1:1** (commit available 62.49 -> 17.56 GB for 44.5 GB pinned), so a
