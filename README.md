@@ -54,7 +54,7 @@ nothing about Strata vs Maya. Model weights are not distributed here.
 
 - Project Maya: https://github.com/mw00/project-maya (MIT) - the engine measured here.
 - Strata: https://github.com/Niko1221/Strata (MIT) - the engine Maya's GLM code is built on; Qwen3.8-Flash-Next is its scope.
-- Discussion: Maya [#185](https://github.com/mw00/project-maya/issues/185) (pinning), Maya
+- Discussion: Maya [#185](https://github.com/mw00/project-maya/issues/185) (pinning; [our comment with the `pin_probe` data](https://github.com/mw00/project-maya/issues/185#issuecomment-6191964007)), Maya
   [#65](https://github.com/mw00/project-maya/issues/65) / [#67](https://github.com/mw00/project-maya/issues/67) (Windows SSD reads, fixed in v1.0.30),
   Strata [#2067](https://github.com/Niko1221/Strata/issues/2067) (GLM request; no maintainer answer when checked).
 - Other Strata derivatives checked: [PolyStrata](https://github.com/VecSzn/PolyStrata), [lighttransport/Strata](https://github.com/lighttransport/Strata) (both MIT).

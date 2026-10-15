@@ -50,7 +50,7 @@ python scripts\maya_ab.py --maya-dir C:\path\to\project-maya --config maya-maya-
 
 - Project Maya: https://github.com/mw00/project-maya（MIT）— 測定対象のエンジン
 - Strata: https://github.com/Niko1221/Strata（MIT）— Mayaの GLM コードの土台。Strata自体の対象は Qwen3.8-Flash-Next
-- 議論: Maya [#185](https://github.com/mw00/project-maya/issues/185)（ピン留め）、[#65](https://github.com/mw00/project-maya/issues/65) / [#67](https://github.com/mw00/project-maya/issues/67)（WindowsのSSD読み込み、v1.0.30で修正済み）、
+- 議論: Maya [#185](https://github.com/mw00/project-maya/issues/185)（ピン留め。[`pin_probe` の実測を載せたコメント](https://github.com/mw00/project-maya/issues/185#issuecomment-6191964007)）、[#65](https://github.com/mw00/project-maya/issues/65) / [#67](https://github.com/mw00/project-maya/issues/67)（WindowsのSSD読み込み、v1.0.30で修正済み）、
   Strata [#2067](https://github.com/Niko1221/Strata/issues/2067)（GLM要望。確認時点でメンテナの回答なし）
 - 確認した他の派生: [PolyStrata](https://github.com/VecSzn/PolyStrata)、[lighttransport/Strata](https://github.com/lighttransport/Strata)（いずれもMIT）
 
