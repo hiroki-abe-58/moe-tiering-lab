@@ -12,7 +12,11 @@ Default settings, RAM tier left to Maya (it chose 26.7 GB): decode **11.3-11.7 t
 ~1050 (8K) tokens/s.
 
 - About **19.5 disk waits per token**, **2.07 ms per wait**, i.e. **~40 ms of a ~75-90 ms token (53-54%)** is waiting
-  for the SSD.
+  for the SSD. Definition of that share (the engine's own `glm stat:` line): `disk ms/tok` = wall time the engine's
+  service thread spends resolving disk misses (the reads of the missed experts, per produced token); `decode ms/tok` =
+  decode wall time per produced token; the share is their ratio. A "wait" is one layer's route that had at least one
+  miss (so a wait reads ~1.4 experts, not one). It is time the *service thread* is blocked on reads, during which the
+  GPU needs those experts; it is not a measurement of how much faster a token would be with an infinitely fast SSD.
 - 2.07 ms per wait is in the range reported after the Windows slow-read fix (Maya #67/#73: 1.3-1.8 ms per expert-sized
   read on another drive; this PC's SSD was not benchmarked directly with a raw-I/O tool). The slow-read problem of
   Maya #65/#67 (fixed upstream in v1.0.30) is not reproduced here, so the remaining SSD time looks like *how many*
@@ -57,10 +61,28 @@ Same harness, `STRATA_GLM_RAM_GB` pinned per arm (n = 3 each, interleaved):
 (`results/exp2-tier-size.md`; the tool's "tier varied" warning is expected here: the tier is the variable.)
 
 Roughly **+0.25-0.3 tokens/s per GB of tier** in this range. The VRAM hit rate is unchanged (64%): the tier size moves
-experts between RAM and SSD, not onto the card. Extrapolating to the ~45 GB tier that this PC's 63 GB could pin would
-suggest on the order of 15-16 tokens/s, but **that is an extrapolation, not a measurement**: raising the page file
-needs a system change that was not made. Maya's own README lists 23 tokens/s for an RTX 5090 + i9-13900K + 64 GB
-Windows PC at 128K context (@gianbing, #139), another machine and settings.
+experts between RAM and SSD, not onto the card.
+
+### 3b. Measured above 26 GB (page file raised to 48 GiB, one reboot)
+
+Phase 1 could not go above ~26 GB because the commit limit (RAM + page file ~ 84-90 GB, ~0.6-2.6 GB left while Strata
+ran) was the limiter. After the owner approved a fixed 48 GiB page file (commit limit 111.4 GB; Strata stopped), the
+same harness (`scripts/maya_tier_sweep.py`, 4 conditions x 3 interleaved rounds, token ids kept) gave:
+
+| RAM tier | decode tok/s (median) | vs 26 GB | disk ms/tok | disk share | prefill 8K tok/s | lowest free RAM during the run |
+|---|---|---|---|---|---|---|
+| 26 GB | 11.66 | - | 49.2 | 0.57 | 1030 | 26.2 GB |
+| 32 GB | 13.76 | +17.9% | 36.1 | 0.50 | 1221 | 20.1 GB |
+| 38 GB | 16.70 | +43.2% | 23.9 | 0.40 | 1502 | 14.1 GB |
+| 42 GB | 18.80 | +61.2% | 17.6 | 0.33 | 1778 | 10.1 GB |
+
+(`results/phase2/exp4-tier-sweep.md`, `exp4-summary.md`; spread inside each arm <= ~1%.) About **+0.45 tokens/s per GB**
+in 26-42 GB, no saturation yet; the VRAM hit rate stays ~65%, the gain is fewer and shorter SSD waits (waits/token
+24 -> 13, ms per wait 2.03 -> 1.33). Not tested: tiers above 42 GB (free RAM would fall below the 8 GB safety margin
+used here) and running Strata at the same time (it holds ~36 GB). This confirms that on this PC the limiter of the tier
+was the commit limit (page file), and shows what it was worth; it does not say anything about the driver's own limit
+(section 4). Maya's own README lists 23 tokens/s for an RTX 5090 + i9-13900K + 64 GB Windows PC at 128K context
+(@gianbing, #139), another machine and settings.
 
 ## 4. Windows pinning: no 70% cap observed on an RTX 5090
 
@@ -91,10 +113,28 @@ build 26200 is Windows 11). **This is a different model with a
 different expert layout; it says nothing about Strata versus Maya as engines.** It is included because Strata's
 maintainers ask for a same-day control run with reports, and it confirms the PC was healthy.
 
+## 6. Do different tiers give different tokens? Yes - through the CPU lane (numerics, not a race)
+
+Greedy decoding, 6 fixed prompts x 256 tokens, token ids diffed (`results/phase3/exp5-determinism/SUMMARY.md`):
+
+- With Maya's defaults the token streams of tier 26 and tier 42 diverge (first divergence at token 0-194 depending on
+  the prompt), although each setting repeats bit for bit across engine starts.
+- With the CPU lane off (`STRATA_GLM_CPU_LANE=0`) tier 26 and tier 42 are **bit-identical on all 6 prompts**, in every
+  round, also with `STRATA_GLM_MTP_DECODE=1` forced on (MTP is off by default here and ~8% slower).
+- Why: the lane computes some RAM-tier experts on the CPU (which ones depends on tier contents and on a split timed at start
+  and re-timed in decode); the CPU path and the GPU path are both quantisation-level approximations of the same expert
+  (relative L2 error vs a double-precision reference on one calibration expert: GPU 1.63%, CPU lane 2.89%, between
+  them 2.97%). Not a data race (results repeat), not MTP.
+- Cost of turning the lane off here: -4.3% decode at tier 26, -9.5% at tier 42.
+- Quality (42 graded tasks): lane off 39/42, lane on 40/42 and 40/42 at tiers 26/42; no difference detected, and a suite
+  this size could not detect a small one.
+- Open: the logits at the first divergent token were not compared; one unexplained deviation (first engine start after
+  the reboot, tier 26, round 0).
+
 ## Not tested
 
-- Output equality between arms (greedy runs were not diffed token by token).
-- A page file of 40 GB or more, or any tier above 26 GB, and therefore the real size of the gain in section 3.
+- Logit margins at the divergence points (section 6); a quality suite large enough to detect a 1-2 point change.
+- Any tier above 42 GB, and any tier above 26 GB while Strata is running.
 - 64K/128K context, DFlash2, vision, Maya-L, multi-GPU, Linux, AMD/HIP.
 - A llama.cpp GLM-4.5-Air run (the model is on disk; it is a different model and was not used for any comparison).
 - Anything on the Strata side beyond its stock benchmark. GLM-5.3-Flash is not supported by Strata's maintainers'

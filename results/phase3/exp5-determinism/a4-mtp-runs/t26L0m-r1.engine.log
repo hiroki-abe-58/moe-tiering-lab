@@ -1,0 +1,53 @@
+glm mtp: CUDA0 the NextN block (blk.45) loaded: 173 MB dense, experts q2_K/q3_K
+glm mtp: CUDA0 the MTP decode drafts over 98741 of 154880 tokens (the ids below 98304 and 437 more: 316 of 496 MB a draft)
+glm fast: CUDA0 only 439 MiB free once the expert pool's 21.60 GB are written (reserve 700 MiB): 0.32 GB less
+glm prefill: CUDA0 chunks of 32768 tokens (--prefill auto, up to 32768; mixer sub-batches of 2048), borrowing 8366 MB of the expert pool while a prompt runs (activations 7015, weight scratch 96, expert staging 86, prestage 1153: 160 experts); disk landing ring 96 experts (692 MB pinned)
+glm fast: CUDA0 VRAM before the expert pool: 9.62 of 31.84 GB in use - dense weights 6.86, state/KV (32768 ctx) 0.66, activations 0.07, other (context, MTP, scratch, prompt path) 2.04
+glm fast: the expert profile E:\oss\project-maya\data\expert-profile-glm.bin ranks 13248 (layer, expert) pairs
+glm fast: CUDA0 layers [0,45) expert pool 21.22 GB, 58-99 slots/layer, the draft layer 73 (3184 total)
+glm fast: CUDA0 RAM tier 25.99 GB pinned, 3897 slots
+glm prefill: CUDA0 57% of the experts' bytes are held pinned: the pool lends at most 85% of its slots
+glm fast: CUDA0 warming the expert tiers 10% (5.0 of 49.7 GB, 1 s)
+glm fast: CUDA0 warming the expert tiers 20% (10.0 of 49.7 GB, 3 s)
+glm fast: CUDA0 warming the expert tiers 30% (14.9 of 49.7 GB, 4 s)
+glm fast: CUDA0 warming the expert tiers 40% (19.9 of 49.7 GB, 5 s)
+glm fast: CUDA0 warming the expert tiers 50% (24.8 of 49.7 GB, 7 s)
+glm fast: CUDA0 warming the expert tiers 60% (29.8 of 49.7 GB, 8 s)
+glm fast: CUDA0 warming the expert tiers 70% (34.8 of 49.7 GB, 9 s)
+glm fast: CUDA0 warming the expert tiers 80% (39.8 of 49.7 GB, 11 s)
+glm fast: CUDA0 warming the expert tiers 90% (44.7 of 49.7 GB, 12 s)
+glm fast: CUDA0 warming the expert tiers 100% (49.7 of 49.7 GB, 13 s)
+glm fast: CUDA0 tiers warm: 6940 experts (49.7 GB) in 13 s (3.81 GB/s)
+maya serve: CUDA0: 861 MiB of VRAM free with everything loaded
+maya generate: glm5-next serve (M3.1): GEN <max_new> [keys] <ids>, GENI <max_new> [keys] <embeddings> <ids>; QUIT to end
+glm window: a window's tokens took more scratch slots than a layer has - that window runs again token by token (said once)
+glm mtp: a drafting round's host time - drafts 2.24 ms, verify 475.35 ms, commit + cache 0.69 ms (16 rounds)
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 2 of 64 emitted tokens outside it, 0 of 16 drafting rounds on the whole head
+glm mtp: 40 rounds, 1.60 tokens a round | rounds by draft length 0:24 1:4 2:8 3:4
+glm stat: decode 149.10 ms/tok (6.71 tok/s) | vram hit 73.50% | ram fetches 97.05/tok | disk 67.89 reads/tok in 44.22 waits/tok, 97.79 ms/tok | promotions 35.28/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 142.2 ms/tok | vram 3128/3184 ram 3822/3897
+glm spec: 23 of 32 drafts accepted (71.9%)
+glm mtp: a drafting round's host time - drafts 1.92 ms, verify 395.45 ms, commit + cache 0.19 ms (12 rounds)
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 0 of 256 emitted tokens outside it, 3 of 12 drafting rounds on the whole head
+glm mtp: 243 rounds, 1.05 tokens a round | rounds by draft length 0:231 1:12
+glm stat: decode 111.95 ms/tok (8.93 tok/s) | vram hit 61.29% | ram fetches 88.62/tok | disk 47.43 reads/tok in 30.16 waits/tok, 67.54 ms/tok | promotions 56.21/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 122.4 ms/tok | vram 3109/3184 ram 3795/3897
+glm spec: 12 of 12 drafts accepted (100.0%)
+glm mtp: a drafting round's host time - drafts 1.70 ms, verify 197.06 ms, commit + cache 0.18 ms (4 rounds)
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 0 of 256 emitted tokens outside it, 0 of 4 drafting rounds on the whole head
+glm mtp: 251 rounds, 1.02 tokens a round | rounds by draft length 0:247 1:4
+glm stat: decode 83.00 ms/tok (12.05 tok/s) | vram hit 69.34% | ram fetches 69.60/tok | disk 31.54 reads/tok in 22.87 waits/tok, 45.31 ms/tok | promotions 53.12/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 142.7 ms/tok | vram 3112/3184 ram 3794/3897
+glm spec: 4 of 4 drafts accepted (100.0%)
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 0 of 256 emitted tokens outside it, 0 of 0 drafting rounds on the whole head
+glm mtp: 255 rounds, 1.00 tokens a round | rounds by draft length 0:255
+glm stat: decode 98.57 ms/tok (10.15 tok/s) | vram hit 62.84% | ram fetches 78.83/tok | disk 40.64 reads/tok in 26.21 waits/tok, 57.79 ms/tok | promotions 58.01/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 140.5 ms/tok | vram 3110/3184 ram 3798/3897
+glm mtp: a drafting round's host time - drafts 2.14 ms, verify 360.06 ms, commit + cache 0.17 ms (4 rounds)
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 0 of 256 emitted tokens outside it, 0 of 4 drafting rounds on the whole head
+glm mtp: 251 rounds, 1.02 tokens a round | rounds by draft length 0:247 1:4
+glm stat: decode 101.42 ms/tok (9.86 tok/s) | vram hit 62.38% | ram fetches 82.21/tok | disk 41.73 reads/tok in 27.52 waits/tok, 59.39 ms/tok | promotions 57.90/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 143.4 ms/tok | vram 3122/3184 ram 3789/3897
+glm spec: 4 of 4 drafts accepted (100.0%)
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 0 of 256 emitted tokens outside it, 0 of 0 drafting rounds on the whole head
+glm mtp: 255 rounds, 1.00 tokens a round | rounds by draft length 0:255
+glm stat: decode 81.66 ms/tok (12.25 tok/s) | vram hit 68.72% | ram fetches 68.69/tok | disk 30.88 reads/tok in 22.90 waits/tok, 44.53 ms/tok | promotions 53.13/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 143.1 ms/tok | vram 3090/3184 ram 3799/3897
+glm mtp: the draft vocabulary (98304 + 437 tokens) - 0 of 256 emitted tokens outside it, 0 of 0 drafting rounds on the whole head
+glm mtp: 255 rounds, 1.00 tokens a round | rounds by draft length 0:255
+glm stat: decode 104.40 ms/tok (9.58 tok/s) | vram hit 60.81% | ram fetches 82.68/tok | disk 44.38 reads/tok in 26.45 waits/tok, 62.48 ms/tok | promotions 59.52/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 148.9 ms/tok | vram 3112/3184 ram 3791/3897
+glm spec: 52 speculative positions, 82.7% accepted

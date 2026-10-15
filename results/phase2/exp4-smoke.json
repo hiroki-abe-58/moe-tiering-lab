@@ -1,0 +1,63 @@
+{
+ "order": [
+  "t26",
+  "t38"
+ ],
+ "common": [],
+ "conditions": {
+  "t26": [
+   "STRATA_GLM_RAM_GB=26"
+  ],
+  "t38": [
+   "STRATA_GLM_RAM_GB=38"
+  ]
+ },
+ "records": [
+  {
+   "cond": "t26",
+   "round": 0,
+   "decode_tok_s": 11.373453203197762,
+   "decode_ms_tok": 87.9251953125,
+   "ttft_chat_ms": 3241.3,
+   "spec_accept": null,
+   "disk_ms_tok": 50.629999999999995,
+   "disk_waits_tok": 24.435000000000002,
+   "disk_ms_per_wait": 2.050640593217408,
+   "disk_share": 0.5758353984313775,
+   "vram_hit_pct": 64.72,
+   "ssd_read_gbs": 2.9936738201009208,
+   "ram_tier_gb": 25.99,
+   "load_s": 30.568033456802368,
+   "prefill_2048": null,
+   "prefill_8192": null,
+   "ttft_8192_ms": null,
+   "min_phys_avail_gb": 24.419479370117188,
+   "min_commit_avail_gb": 40.39378356933594,
+   "max_commit_used_pct": 63.736800723305926,
+   "max_vram_mib": 31876
+  },
+  {
+   "cond": "t38",
+   "round": 0,
+   "decode_tok_s": 16.62366837814154,
+   "decode_ms_tok": 60.1578125,
+   "ttft_chat_ms": 2109.4,
+   "spec_accept": null,
+   "disk_ms_tok": 23.64,
+   "disk_waits_tok": 15.615000000000002,
+   "disk_ms_per_wait": 1.5146551391582626,
+   "disk_share": 0.39298536010267326,
+   "vram_hit_pct": 65.00999999999999,
+   "ssd_read_gbs": 2.041865185856369,
+   "ram_tier_gb": 38.0,
+   "load_s": 34.95202589035034,
+   "prefill_2048": null,
+   "prefill_8192": null,
+   "ttft_8192_ms": null,
+   "min_phys_avail_gb": 13.60577392578125,
+   "min_commit_avail_gb": 28.30774688720703,
+   "max_commit_used_pct": 74.58694443210632,
+   "max_vram_mib": 31710
+  }
+ ]
+}

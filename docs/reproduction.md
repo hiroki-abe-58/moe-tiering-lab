@@ -42,7 +42,25 @@ python scripts\maya_ab.py --maya-dir C:\path\to\project-maya --config maya-maya-
     --rounds 3 --out results\exp2-tier-size.json
 ```
 
-`STRATA_GLM_RAM_GB=26` is what this PC's commit limit allowed; use a value your PC can pin without swapping.
+Phase 2/3 tools use Maya's own Python (`<maya>\.venv\Scripts\python.exe`: `psutil` and `serve.server`), one engine start per run:
+
+```powershell
+$py = "C:\path\to\project-maya\.venv\Scripts\python.exe"
+# tier sweep (needs a commit limit big enough for the largest tier: here page file 48 GiB, scripts\pagefile_set.ps1, one reboot)
+& $py scripts\maya_tier_sweep.py --maya-dir C:\path\to\project-maya --config C:\path\to\project-maya\maya-maya-s-v2-iq2_xxs.json `
+    --rounds 3 --cond t26:STRATA_GLM_RAM_GB=26 --cond t32:STRATA_GLM_RAM_GB=32 --cond t38:STRATA_GLM_RAM_GB=38 `
+    --cond t42:STRATA_GLM_RAM_GB=42 --out results\phase2\exp4-tier-sweep.json
+# are the tokens tier-independent? (lane off vs default; --no-long skips the 2K/8K prompts)
+& $py scripts\maya_tier_sweep.py ... --no-long --cond t26L0:STRATA_GLM_RAM_GB=26,STRATA_GLM_CPU_LANE=0 `
+    --cond t42L0:STRATA_GLM_RAM_GB=42,STRATA_GLM_CPU_LANE=0 --cond t26:STRATA_GLM_RAM_GB=26 --cond t42:STRATA_GLM_RAM_GB=42
+# graded quality suite, one arm
+& $py scripts\maya_quality.py --maya-dir C:\path\to\project-maya --config ... --env STRATA_GLM_RAM_GB=26 --label t26 --out q-t26.json
+```
+
+Free RAM check before a big tier: keep >= 8 GiB physical and commit headroom (here: 10 GB free at a 42 GB tier).
+`scripts\night_monitor.ps1` logs GPU/RAM/commit every 30 s and stops the engine at GPU >= 85 C.
+
+`STRATA_GLM_RAM_GB=26` is what this PC's commit limit allowed in Phase 1; use a value your PC can pin without swapping.
 `--common` / `--cond` accept only `STRATA_*`, `MAYA_*` and the pseudo-setting `AFFINITY`. The tool never edits your
 Maya config: it writes a temporary copy next to it and deletes it.
 

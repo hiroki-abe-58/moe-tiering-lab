@@ -1,0 +1,33 @@
+glm fast: CUDA0 only 549 MiB free once the expert pool's 22.05 GB are written (reserve 700 MiB): 0.21 GB less
+glm prefill: CUDA0 chunks of 32768 tokens (--prefill auto, up to 32768; mixer sub-batches of 2048), borrowing 6484 MB of the expert pool while a prompt runs (activations 5133, weight scratch 96, expert staging 86, prestage 1153: 160 experts); disk landing ring 96 experts (692 MB pinned)
+glm fast: CUDA0 VRAM before the expert pool: 9.18 of 31.84 GB in use - dense weights 6.86, state/KV (32768 ctx) 0.62, activations 0.06, other (context, MTP, scratch, prompt path) 1.65
+glm fast: the expert profile E:\oss\project-maya\data\expert-profile-glm.bin ranks 13248 (layer, expert) pairs
+glm fast: CUDA0 layers [0,45) expert pool 21.77 GB, 60-101 slots/layer (3287 total)
+glm fast: CUDA0 RAM tier 25.99 GB pinned, 3923 slots
+glm prefill: CUDA0 60% of the experts' bytes are held pinned: the pool lends at most 85% of its slots
+glm fast: CUDA0 warming the expert tiers 10% (5.1 of 50.3 GB, 1 s)
+glm fast: CUDA0 warming the expert tiers 20% (10.1 of 50.3 GB, 3 s)
+glm fast: CUDA0 warming the expert tiers 30% (15.1 of 50.3 GB, 4 s)
+glm fast: CUDA0 warming the expert tiers 40% (20.1 of 50.3 GB, 5 s)
+glm fast: CUDA0 warming the expert tiers 50% (25.2 of 50.3 GB, 7 s)
+glm fast: CUDA0 warming the expert tiers 60% (30.2 of 50.3 GB, 8 s)
+glm fast: CUDA0 warming the expert tiers 70% (35.2 of 50.3 GB, 10 s)
+glm fast: CUDA0 warming the expert tiers 80% (40.3 of 50.3 GB, 11 s)
+glm fast: CUDA0 warming the expert tiers 90% (45.3 of 50.3 GB, 12 s)
+glm fast: CUDA0 warming the expert tiers 100% (50.3 of 50.3 GB, 13 s)
+glm fast: CUDA0 tiers warm: 7076 experts (50.3 GB) in 13 s (3.76 GB/s)
+cpu lane verify (16 calls, layer 3): relative L2 error 0.01494, worst call 0.01582
+cpu lane verify (32 calls, layer 3): relative L2 error 0.01494, worst call 0.01582
+cpu lane verify (48 calls, layer 3): relative L2 error 0.01494, worst call 0.01582
+cpu lane verify (64 calls, layer 3): relative L2 error 0.01494, worst call 0.01582
+cpu lane verify (80 calls, layer 3): relative L2 error 0.01494, worst call 0.01582
+glm fast: CUDA0 CPU lane off: an expert 72.036 ms on the CPU vs 0.140 ms over PCIe
+maya serve: CUDA0: 644 MiB of VRAM free with everything loaded
+maya generate: glm5-next serve (M3.1): GEN <max_new> [keys] <ids>, GENI <max_new> [keys] <embeddings> <ids>; QUIT to end
+glm stat: decode 72.42 ms/tok (13.81 tok/s) | vram hit 77.44% | ram fetches 44.98/tok | disk 28.39 reads/tok in 19.72 waits/tok, 41.29 ms/tok | promotions 45.84/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 135.7 ms/tok | vram 3226/3287 ram 3849/3923
+glm stat: decode 96.33 ms/tok (10.38 tok/s) | vram hit 63.13% | ram fetches 79.87/tok | disk 38.53 reads/tok in 25.96 waits/tok, 55.23 ms/tok | promotions 57.70/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 116.4 ms/tok | vram 3213/3287 ram 3824/3923
+glm stat: decode 76.53 ms/tok (13.07 tok/s) | vram hit 70.68% | ram fetches 66.12/tok | disk 27.73 reads/tok in 20.93 waits/tok, 40.17 ms/tok | promotions 52.21/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 135.5 ms/tok | vram 3214/3287 ram 3826/3923
+glm stat: decode 91.59 ms/tok (10.92 tok/s) | vram hit 65.01% | ram fetches 76.43/tok | disk 36.11 reads/tok in 24.66 waits/tok, 51.67 ms/tok | promotions 56.76/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 131.7 ms/tok | vram 3210/3287 ram 3827/3923
+glm stat: decode 92.72 ms/tok (10.79 tok/s) | vram hit 64.04% | ram fetches 78.45/tok | disk 36.37 reads/tok in 25.28 waits/tok, 52.14 ms/tok | promotions 57.74/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 136.0 ms/tok | vram 3227/3287 ram 3821/3923
+glm stat: decode 76.34 ms/tok (13.10 tok/s) | vram hit 70.18% | ram fetches 67.59/tok | disk 27.30 reads/tok in 21.34 waits/tok, 39.79 ms/tok | promotions 51.86/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 136.5 ms/tok | vram 3195/3287 ram 3823/3923
+glm stat: decode 98.34 ms/tok (10.17 tok/s) | vram hit 62.62% | ram fetches 80.98/tok | disk 40.22 reads/tok in 24.97 waits/tok, 57.00 ms/tok | promotions 58.54/tok | cpu lane 0.00/tok in 0.00 ms/tok | prompt 138.5 ms/tok | vram 3219/3287 ram 3827/3923

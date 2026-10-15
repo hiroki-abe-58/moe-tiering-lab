@@ -13,13 +13,13 @@ and what the measurements said.
 
 | Question | Result |
 |---|---|
-| Where does a decode token go? | **~54%** is waiting for the SSD (19.5 waits/token x 2.07 ms). Default decode 11.3-11.7 tokens/s, prefill ~1050 tokens/s at 8K. |
+| Where does a decode token go? | At the default 26 GB RAM tier **~54%** of the decode wall time is the engine's service thread blocked on SSD reads (19.5 waits/token x 2.07 ms; a wait = one layer's route with a miss; definition in [findings §1](docs/findings.md)). Default decode 11.3-11.7 tokens/s, prefill ~1050 tokens/s at 8K. |
 | Does P-core / E-core placement of the CPU lane help on a Core Ultra 9 285K? | **No.** Five arms x 3 interleaved runs: +1.8% (just fewer threads) to -7.1% (P-cores only). No pull request made. |
-| What moves the number? | **RAM-tier size.** 10 / 18 / 26 GB tier -> 6.9 / 8.8 / 11.2 tokens/s. On Windows the page file bounds the tier (commit limit); here it was ~21-26 GB. |
+| What moves the number? | **RAM-tier size.** Measured: 10 / 18 / 26 GB -> 6.9 / 8.8 / 11.2 tokens/s; after raising the page file to 48 GiB, 26 / 32 / 38 / 42 GB -> **11.7 / 13.8 / 16.7 / 18.8 tokens/s (+61%)**, n = 3 per arm, spread <= ~1%. On Windows the commit limit (RAM + page file) bounded the tier here (~21-26 GB before). Tiers above 42 GB were not tried (free RAM was down to 10 GB). |
+| Do different tiers give different tokens? | **Yes, with the default CPU lane** (greedy tokens diverge between tier 26 and 42), **no with `STRATA_GLM_CPU_LANE=0`** (bit-identical, also with MTP forced on). The CPU path and the GPU path of an expert differ at quantisation level (2.9% vs 1.6% L2 error against a double reference on one expert), so which experts the lane takes changes the text. Lane off costs 4-10% decode. 42-task quality suite: 39/42 lane off, 40/42 lane on - no difference detected, none could be at this size. [Details](results/phase3/exp5-determinism/SUMMARY.md). |
 | Is there a "WDDM caps pinned RAM at ~70%" limit? ([Maya #185](https://github.com/mw00/project-maya/issues/185)) | **Unproven either way.** All that was shown: 44.5 GB (70.2% of RAM) was pinned with no refusal on an RTX 5090, VBS/HVCI on; the probe stopped because free RAM ran out, so a cap above 44.5 GB is neither shown nor excluded. Pinned memory is charged to the commit limit 1:1. |
 
-Not tested (see findings): output equality between arms, a larger page file / tier above 26 GB, 64K+ context, Linux, AMD,
-other CPUs. The gain from a larger tier is only extrapolated, not measured.
+Not tested (see findings): logit margins at the divergence points, tiers above 42 GB, 64K+ context, Linux, AMD, other CPUs.
 
 ## What is here
 
@@ -27,6 +27,9 @@ other CPUs. The gain from a larger tier is only extrapolated, not measured.
 |---|---|
 | [`scripts/maya_ab.py`](scripts/maya_ab.py) | interleaved, order-reversing A/B driver around Maya's `--bench`; median / range / % / "above noise"; warns if the RAM tier differed between runs; never edits your config |
 | [`src/moelab/`](src/moelab) | parsers for `maya-bench.txt` and the engine's `glm stat:` lines, statistics, CPU core classes and affinity (Windows) |
+| [`scripts/maya_probe.py`](scripts/maya_probe.py), [`scripts/maya_tier_sweep.py`](scripts/maya_tier_sweep.py) | one engine start per run: token ids, TTFT, SSD GB/s, memory / commit / VRAM; interleaved sweeps with token-stream diffing |
+| [`scripts/maya_quality.py`](scripts/maya_quality.py) | 42 programmatically graded tasks (math, code, JSON, Japanese, English) for A/B arms of the same engine |
+| [`scripts/pagefile_*.ps1`](scripts) | read / set / roll back the page file (admin; never reboots) - Phase 2 used these |
 | [`tools/pin_probe/`](tools/pin_probe) | CUDA program: how much page-locked host memory can a process pin, next to RAM and commit numbers |
 | [`scripts/audit_windows.ps1`](scripts/audit_windows.ps1) | read-only machine audit with user names and paths scrubbed (avoids the slow Storage cmdlets) |
 | [`results/`](results) | raw per-run JSON and tables for both sweeps, the machine audit, Strata's own benchmark report |

@@ -1,0 +1,59 @@
+﻿{
+    "label":  "after-reboot",
+    "collected_utc":  "2026-10-15T15:35:07Z",
+    "is_admin":  false,
+    "ram_total_gb":  63.39,
+    "ram_free_gb":  52.99,
+    "commit_limit_gb":  111.39,
+    "committed_gb":  11.8,
+    "commit_available_gb":  99.59,
+    "vram_used_mib":  1121,
+    "vram_total_mib":  32607,
+    "automatic_managed_pagefile":  false,
+    "registry_PagingFiles":  [
+                                 "C:\\pagefile.sys 49152 49152"
+                             ],
+    "registry_ExistingPageFiles":  [
+                                       "\\??\\C:\\pagefile.sys"
+                                   ],
+    "pagefile_usage":  [
+                           {
+                               "name":  "C:\\pagefile.sys",
+                               "allocated_mb":  49152,
+                               "current_mb":  0,
+                               "peak_mb":  0
+                           }
+                       ],
+    "pagefile_setting":  [
+                             {
+                                 "name":  "C:\\pagefile.sys",
+                                 "initial_mb":  49152,
+                                 "maximum_mb":  49152
+                             }
+                         ],
+    "crash_control":  {
+                          "CrashDumpEnabled":  3,
+                          "DumpFile":  "C:\\windows\\MEMORY.DMP",
+                          "AutoReboot":  1,
+                          "Overwrite":  1,
+                          "DedicatedDumpFile":  null
+                      },
+    "clear_pagefile_at_shutdown":  0,
+    "volumes":  [
+                    {
+                        "drive":  "C:",
+                        "size_gb":  1906,
+                        "free_gb":  958.9
+                    },
+                    {
+                        "drive":  "D:",
+                        "size_gb":  1863,
+                        "free_gb":  1862.8
+                    },
+                    {
+                        "drive":  "E:",
+                        "size_gb":  7452,
+                        "free_gb":  5058.1
+                    }
+                ]
+}
