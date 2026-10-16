@@ -19,7 +19,9 @@ and what the measurements said.
 | Do different tiers give different tokens? | **Yes, with the default CPU lane** (greedy tokens diverge between tier 26 and 42), **no with `STRATA_GLM_CPU_LANE=0`** (bit-identical, also with MTP forced on). The CPU path and the GPU path of an expert differ at quantisation level (2.9% vs 1.6% L2 error against a double reference on one expert), so which experts the lane takes changes the text. Lane off costs 4-10% decode. 42-task quality suite: 39/42 lane off, 40/42 lane on - no difference detected, none could be at this size. [Details](results/phase3/exp5-determinism/SUMMARY.md). |
 | Is there a "WDDM caps pinned RAM at ~70%" limit? ([Maya #185](https://github.com/mw00/project-maya/issues/185)) | **Unproven either way.** All that was shown: 44.5 GB (70.2% of RAM) was pinned with no refusal on an RTX 5090, VBS/HVCI on; the probe stopped because free RAM ran out, so a cap above 44.5 GB is neither shown nor excluded. Pinned memory is charged to the commit limit 1:1. |
 
-Not tested (see findings): logit margins at the divergence points, tiers above 42 GB, 64K+ context, Linux, AMD, other CPUs.
+| Is the SSD wait something reader tuning can fix? | **Not on this PC.** The drive delivers ~6 GB/s during waits at every tier (bandwidth-bound), and the rest of a token stays ~36 ms. Screens (mostly 2 rounds): CPU-lane/SSD overlap +0.7%, reader threads 0%, 4 chunks +2.1%, promotion knobs 0%. A CPU/PCIe split change gave +7.3% (and Maya's calibrator +8.8%, one sample), but my baseline was uncalibrated, so this is a per-machine tuning point, not a bug; nothing was proposed upstream. [Exp6](results/phase3/exp6-io/SUMMARY.md), [Exp7](results/phase3/exp7-opt/SUMMARY.md). |
+
+Not tested (see findings): logit margins at the divergence points, tiers above 42 GB, 64K+ context and long-run soak tests (a soak script exists but was never run, so it is not published), a raw-read benchmark of the drive, a GPU-timeline breakdown of the ~36 ms floor, Linux, AMD, other CPUs.
 
 ## What is here
 

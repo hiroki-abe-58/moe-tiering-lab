@@ -1,0 +1,210 @@
+diff --git a/include/strata/core/glm_model.hpp b/include/strata/core/glm_model.hpp
+index 9f24a28..79eb17c 100644
+--- a/include/strata/core/glm_model.hpp
++++ b/include/strata/core/glm_model.hpp
+@@ -130,6 +130,8 @@ public:
+         uint64_t tokens = 0, hits = 0, misses = 0, miss_layers = 0;
+         uint64_t ram_hits = 0, disk_reads = 0, promotions = 0, cpu_experts = 0, disk_skips = 0;
+         double ms = 0, miss_ms = 0, disk_ms = 0, cpu_ms = 0;
++        uint64_t both_routes = 0;                           // STRATA_GLM_IO_TRACE: see FastState::both_routes
++        double both_lane_ms = 0, both_disk_ms = 0, both_min_ms = 0;
+         int64_t pool_slots = 0, pool_used = 0, ram_slots = 0, ram_used = 0;
+         double pool_gb = 0, ram_gb = 0;
+     };
+diff --git a/src/core/glm_fast_path.cu b/src/core/glm_fast_path.cu
+index 2c1ce5a..eba7e78 100644
+--- a/src/core/glm_fast_path.cu
++++ b/src/core/glm_fast_path.cu
+@@ -1628,7 +1628,13 @@ bool Glm5Model::fast_setup(std::string& err) {
+         F->upd_at.assign((size_t) (2 * F->n_keys + NL * gf::kSpares), 0);
+         F->upd_gen.assign(F->upd_at.size(), 0u);
+         // disk reads: three slices per expert in parallel, through the staging above when the RAM tier has no free slot
+-        F->workers.reset(new Workers(8));
++        // STRATA_GLM_IO_THREADS=<n> (default 8 + the service thread): the threads that issue those reads - each job is one
++        // synchronous read, so this is the drive's queue depth during a wait
++        static const int io_threads = [] {
++            const char* v = std::getenv("STRATA_GLM_IO_THREADS");
++            return v == nullptr ? 8 : std::max(1, std::min(32, std::atoi(v)));
++        }();
++        F->workers.reset(new Workers(io_threads));
+         // STRATA_GLM_DISK_SKIP_FROM=<n>: a trunk expert at route rank >= n that is in neither VRAM nor the RAM tier is
+         // left out of the token instead of read from the disk (an approximation: off by default).  Where the experts do
+         // not fit in VRAM + RAM the disk reads are most of a token (a 3090 + 60 GB RAM beside one SATA SSD: ~13 reads,
+@@ -3547,6 +3553,10 @@ Glm5Model::FastStats Glm5Model::fast_stats() const {
+         s.cpu_ms += (double) F->cpu_us.load() / 1000.0;
+         s.miss_ms += (double) F->miss_us.load() / 1000.0;
+         s.disk_ms += (double) F->disk_us.load() / 1000.0;
++        s.both_routes += F->both_routes.load();
++        s.both_lane_ms += (double) F->both_lane_us.load() / 1000.0;
++        s.both_disk_ms += (double) F->both_disk_us.load() / 1000.0;
++        s.both_min_ms += (double) F->both_min_us.load() / 1000.0;
+         s.pool_slots += F->pool_slots;
+         s.pool_gb += (double) F->pool_bytes / 1073741824.0;
+         s.ram_gb += (double) F->ram_bytes / 1073741824.0;
+@@ -3646,6 +3656,62 @@ void Glm5Model::fast_service() {
+     auto last_kick = last_route;
+     unsigned int kick_polls = 0;
+ #endif
++    // STRATA_GLM_LANE_OVERLAP=1 (off by default): a token path route that has disk reads AND a CPU-lane share used to
++    // read the SSD first and run the lane after it.  The two use different resources (the drive and its reader threads /
++    // the lane's pool), so with this the lane runs on a helper thread of this function while this thread reads; the
++    // helper answers the device itself (ans->seq, as the inline lane does) and this thread waits for it before it counts
++    // the route as processed.  Routes with only one of the two, and a verify window's routes, are unchanged.
++    struct LaneJob {
++        int il = 0, ne = 0;
++        const uint8_t* blob[8] = {};
++        float w[8] = {};
++        const float* x = nullptr;
++        gf::CpuAnswer* ans = nullptr;
++        unsigned int seq = 0;
++    };
++    struct LaneHelper {
++        LaneJob job;
++        uint64_t lane_us = 0;
++        std::atomic<unsigned int> req{0}, ack{0};   // jobs handed over / finished (one at a time)
++        std::atomic<bool> quit{false};
++        std::thread th;
++        ~LaneHelper() {
++            quit.store(true);
++            if (th.joinable()) th.join();
++        }
++    } lh;
++    static const bool lane_overlap = [] {
++        const char* v = getenv("STRATA_GLM_LANE_OVERLAP");
++        return v != nullptr && std::atoi(v) != 0;
++    }();
++    if (lane_overlap)
++        lh.th = std::thread([this, F, &lh] {
++            unsigned int seen = 0;
++            auto last_job = std::chrono::steady_clock::now();
++            while (!lh.quit.load(std::memory_order_relaxed)) {
++                if (lh.req.load(std::memory_order_acquire) == seen) {
++                    // spin through a decode (jobs come a few ms apart), poll gently once it has been quiet
++                    if (std::chrono::steady_clock::now() - last_job > std::chrono::milliseconds(200))
++                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++                    else
++                        cpu_relax();
++                    continue;
++                }
++                const LaneJob& j = lh.job;
++                const auto t0 = std::chrono::steady_clock::now();
++                fast_cpu_experts(j.il, j.ne, j.blob, j.w, j.x, j.ans->part);
++                std::atomic_thread_fence(std::memory_order_release);
++                j.ans->seq = j.seq;
++                F->cpu_experts.fetch_add((uint64_t) j.ne, std::memory_order_relaxed);
++                F->cpu_routes.fetch_add(1, std::memory_order_relaxed);
++                lh.lane_us = (uint64_t) std::chrono::duration_cast<std::chrono::microseconds>(
++                                 std::chrono::steady_clock::now() - t0).count();
++                F->cpu_us.fetch_add(lh.lane_us, std::memory_order_relaxed);
++                last_job = std::chrono::steady_clock::now();
++                seen = lh.req.load(std::memory_order_relaxed);
++                lh.ack.store(seen, std::memory_order_release);
++            }
++        });
+     while (!F->quit.load(std::memory_order_relaxed)) {
+         gf::MoeRequest* rq = F->ring_h + (next % gf::kRingSize);
+         const unsigned int sq = rq->seq;
+@@ -3711,6 +3777,24 @@ void Glm5Model::fast_service() {
+             ++next;
+             continue;
+         }
++        uint64_t route_disk_us = 0;   // this route's disk wait (STRATA_GLM_IO_TRACE: against the lane's time below)
++        bool lane_async = false;      // STRATA_GLM_LANE_OVERLAP: this route's lane runs on the helper meanwhile
++        if (lane_overlap && rq->miss_mask != 0u && rq->cpu_mask != 0u && F->cpu_ans_h != nullptr && rq->win_n == 0 &&
++            rq->win == 0) {
++            LaneJob& j = lh.job;
++            j.il = rq->layer;
++            j.ne = 0;
++            for (int i = 0; i < K; ++i)
++                if ((rq->cpu_mask >> i) & 1u) {
++                    j.blob[j.ne] = (const uint8_t*) rq->cpu_src[i];
++                    j.w[j.ne++] = rq->w[i];
++                }
++            j.x = rq->x;
++            j.ans = F->cpu_ans_h;
++            j.seq = next;
++            lh.req.store(lh.req.load(std::memory_order_relaxed) + 1, std::memory_order_release);
++            lane_async = true;
++        }
+         {
+             std::lock_guard<std::mutex> lk(F->mu);
+             const int il = rq->layer;
+@@ -3933,6 +4017,7 @@ void Glm5Model::fast_service() {
+                 F->disk_reads.fetch_add((uint64_t) nr, std::memory_order_relaxed);   // read here (not ahead)
+                 for (int r2 = 0; r2 < nr; ++r2) ++F->diag_disk[F->left[(size_t) il * g.n_expert + ids[mi[rd[r2]]]] & 3];
+                 F->disk_us.fetch_add(us, std::memory_order_relaxed);
++                route_disk_us = us;
+                 F->miss_us.fetch_add(us, std::memory_order_relaxed);
+                 F->miss_layers.fetch_add(1, std::memory_order_relaxed);
+                 static const bool trace = getenv("STRATA_GLM_SVC_TRACE") != nullptr;
+@@ -3955,7 +4040,17 @@ void Glm5Model::fast_service() {
+             ++next;
+             continue;
+         }
+-        if (rq->cpu_mask != 0u && F->cpu_ans_h != nullptr) {
++        if (lane_async) {   // the helper has been running this route's lane since before the reads (see lane_overlap)
++            const unsigned int want = lh.req.load(std::memory_order_relaxed);
++            while (lh.ack.load(std::memory_order_acquire) != want) cpu_relax();
++            static const bool io_trace_a = std::getenv("STRATA_GLM_IO_TRACE") != nullptr;
++            if (io_trace_a && route_disk_us != 0) {   // here the two overlap: min() is what it hid at most
++                F->both_routes.fetch_add(1, std::memory_order_relaxed);
++                F->both_lane_us.fetch_add(lh.lane_us, std::memory_order_relaxed);
++                F->both_disk_us.fetch_add(route_disk_us, std::memory_order_relaxed);
++                F->both_min_us.fetch_add(std::min(lh.lane_us, route_disk_us), std::memory_order_relaxed);
++            }
++        } else if (rq->cpu_mask != 0u && F->cpu_ans_h != nullptr) {
+             const auto t0 = std::chrono::steady_clock::now();
+             const unsigned int cm = rq->cpu_mask;
+             int ne = 0;
+@@ -3986,9 +4081,16 @@ void Glm5Model::fast_service() {
+                 ans->seq = next;
+                 F->cpu_experts.fetch_add((uint64_t) ne, std::memory_order_relaxed);
+                 F->cpu_routes.fetch_add(1, std::memory_order_relaxed);
+-                F->cpu_us.fetch_add((uint64_t) std::chrono::duration_cast<std::chrono::microseconds>(
+-                                        std::chrono::steady_clock::now() - t0).count(),
+-                                    std::memory_order_relaxed);
++                const uint64_t lane_us = (uint64_t) std::chrono::duration_cast<std::chrono::microseconds>(
++                                             std::chrono::steady_clock::now() - t0).count();
++                F->cpu_us.fetch_add(lane_us, std::memory_order_relaxed);
++                static const bool io_trace = std::getenv("STRATA_GLM_IO_TRACE") != nullptr;
++                if (io_trace && route_disk_us != 0) {   // a route that read from the SSD, then ran the lane (both_routes)
++                    F->both_routes.fetch_add(1, std::memory_order_relaxed);
++                    F->both_lane_us.fetch_add(lane_us, std::memory_order_relaxed);
++                    F->both_disk_us.fetch_add(route_disk_us, std::memory_order_relaxed);
++                    F->both_min_us.fetch_add(std::min(lane_us, route_disk_us), std::memory_order_relaxed);
++                }
+             }
+         }
+         F->processed.fetch_add(1, std::memory_order_release);
+diff --git a/src/core/glm_fast_state.hpp b/src/core/glm_fast_state.hpp
+index 94f9bdf..40d614b 100644
+--- a/src/core/glm_fast_state.hpp
++++ b/src/core/glm_fast_state.hpp
+@@ -667,6 +667,9 @@ struct Glm5Model::FastState {
+     float disk_skip_w = 0.0f;              // ... or of a smaller weight share than this (0: none)
+     std::atomic<uint64_t> scratch_uses{0}, demotions{0}, drops{0};
+     std::atomic<uint64_t> miss_us{0}, disk_us{0};
++    // STRATA_GLM_IO_TRACE: routes with a disk read AND a CPU-lane share (the lane runs after the read today): how many, the
++    // lane's time and the read's time in them, and the sum of min(read, lane) - what running them side by side could save
++    std::atomic<uint64_t> both_routes{0}, both_lane_us{0}, both_disk_us{0}, both_min_us{0};
+     uint64_t tokens = 0;
+     double ms = 0;
+     bool timing = false;
+diff --git a/src/program/generate.cpp b/src/program/generate.cpp
+index b2c48bd..22a8d26 100644
+--- a/src/program/generate.cpp
++++ b/src/program/generate.cpp
+@@ -1936,6 +1936,13 @@ static int glm_pack_generate(const Options& o) {
+                          (double) (st2.cpu_experts - st1.cpu_experts) / n, (st2.cpu_ms - st1.cpu_ms) / n,
+                          prompt_ms / (double) std::max<size_t>(1, prompt.size()), (long long) st2.pool_used,
+                          (long long) st2.pool_slots, (long long) st2.ram_used, (long long) st2.ram_slots);
++            static const bool io_trace = std::getenv("STRATA_GLM_IO_TRACE") != nullptr;
++            if (io_trace)   // routes that read the SSD and then ran the CPU lane: what the two could save side by side
++                std::fprintf(stderr,
++                             "glm io: %.2f routes/tok read the SSD and ran the CPU lane after it | lane %.2f ms/tok and "
++                             "read %.2f ms/tok in them | min(read, lane) %.2f ms/tok (the most an overlap could save)\n",
++                             (double) (st2.both_routes - st1.both_routes) / n, (st2.both_lane_ms - st1.both_lane_ms) / n,
++                             (st2.both_disk_ms - st1.both_disk_ms) / n, (st2.both_min_ms - st1.both_min_ms) / n);
+             if (st2.disk_skips > st1.disk_skips)
+                 std::fprintf(stderr, "glm skip: %.2f disk-only experts/tok left out (STRATA_GLM_DISK_SKIP_W / _FROM)\n",
+                              (double) (st2.disk_skips - st1.disk_skips) / n);

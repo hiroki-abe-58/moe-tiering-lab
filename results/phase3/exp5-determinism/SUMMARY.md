@@ -23,6 +23,13 @@ Setup: Maya v1.1.11 (d187195 build), Maya-S-v2-IQ2_XXS, 1x RTX 5090, 32K ctx, gr
   **GPU kernels 1.63%, CPU lane 2.89%, GPU-vs-CPU-lane 2.97%.** (`CPU_LANE_VERIFY=1` gave 1.5% for the lane on its calibration calls; that mode slows the lane so much that the engine turns the lane off - do not use it for timing.) These are quantisation-level differences (activations are quantised differently on the two paths), orders of magnitude above float rounding, and one expert of ~8 per layer through 78 layers is enough to flip a near-tie in the greedy choice.
   Measured on ONE expert of ONE layer: not a statement about every layer.
 - Evidence 3 (timing dependence): the lane's expert split is re-timed in decode. In the tier-32/38/42 runs the engine logged `CPU lane timed again in decode: an expert 0.167-0.170 ms (planned with 0.136-0.140)` and moved from `0 0 1 1 2 2 3 3 4` to `0 0 1 1 2 2 3 3 3` in EVERY run (so those runs repeat), but at tier 26 it happened in some starts (a smoke run, one lane+MTP run) and not in others; a different plan = different experts on the CPU = different tokens. Output with the lane on therefore depends on timing-derived decisions; only the lane-off arm is timing-independent.
+- Perturbation test (`scripts/exp5_perturb.py`; tier 26, CPU plan fixed at `001122333` so the lane's re-timing is not a variable; 8 starts):
+  lane off, idle x2 and under load x2 (8 CPU spinners + an unbuffered 46 GB sequential read from the experts' drive): **all 4 bit-identical**.
+  Lane on: idle round 0 = output set A; under load x2 and idle round 1 = output set B (3 identical). So outside CPU/SSD load did **not** change the
+  tokens, but the FIRST engine start of the series did, as in the phase-2 sweep (t26 round 0) and the first runs of the overlap A/B
+  (`results/phase3/exp7-opt/c1-overlap`: t26 r0 = A, t26ov r0 = B, t42 r0 = C, t42ov r1 = D, then stable). Each series' first start follows a long idle gap
+  (clocks/caches cold). We did not test that cause; what the data support is: with the lane on, the text depends on state that is not identical
+  from one engine start to the next in the first starts of a series; with the lane off it never varied (every lane-off start in this report: 20+, all identical per prompt).
 - NOT explained: the very first engine start after the reboot (tier 26, phase 2 sweep, round 0) differed from rounds 1-2 on 5/6 prompts; in this night's runs round 0 never differed. We do not know why (no `timed again` line in those logs).
 - Not done: logits at the first divergent token (the engine's `--dump-logits` is in `maya generate`; not wired for the GLM server path here). So "top-2 margin was tiny at the divergence" is a hypothesis, not a measurement.
 

@@ -1,0 +1,35 @@
+glm fast: CUDA0 only 547 MiB free once the expert pool's 22.05 GB are written (reserve 700 MiB): 0.21 GB less
+glm prefill: CUDA0 chunks of 32768 tokens (--prefill auto, up to 32768; mixer sub-batches of 2048), borrowing 6484 MB of the expert pool while a prompt runs (activations 5133, weight scratch 96, expert staging 86, prestage 1153: 160 experts); disk landing ring 96 experts (692 MB pinned)
+glm fast: CUDA0 VRAM before the expert pool: 9.18 of 31.84 GB in use - dense weights 6.86, state/KV (32768 ctx) 0.62, activations 0.06, other (context, MTP, scratch, prompt path) 1.65
+glm fast: the expert profile E:\oss\maya-dev\data\expert-profile-glm.bin ranks 13248 (layer, expert) pairs
+glm fast: CUDA0 layers [0,45) expert pool 21.77 GB, 60-101 slots/layer (3287 total)
+glm fast: CUDA0 RAM tier 25.99 GB pinned, 3923 slots
+glm prefill: CUDA0 60% of the experts' bytes are held pinned: the pool lends at most 85% of its slots
+glm fast: CUDA0 warming the expert tiers 10% (5.1 of 50.3 GB, 1 s)
+glm fast: CUDA0 warming the expert tiers 20% (10.1 of 50.3 GB, 3 s)
+glm fast: CUDA0 warming the expert tiers 30% (15.1 of 50.3 GB, 4 s)
+glm fast: CUDA0 warming the expert tiers 40% (20.1 of 50.3 GB, 5 s)
+glm fast: CUDA0 warming the expert tiers 50% (25.2 of 50.3 GB, 7 s)
+glm fast: CUDA0 warming the expert tiers 60% (30.2 of 50.3 GB, 8 s)
+glm fast: CUDA0 warming the expert tiers 70% (35.2 of 50.3 GB, 10 s)
+glm fast: CUDA0 warming the expert tiers 80% (40.3 of 50.3 GB, 11 s)
+glm fast: CUDA0 warming the expert tiers 90% (45.3 of 50.3 GB, 12 s)
+glm fast: CUDA0 warming the expert tiers 100% (50.3 of 50.3 GB, 13 s)
+glm fast: CUDA0 tiers warm: 7076 experts (50.3 GB) in 13 s (3.76 GB/s)
+glm fast: CUDA0 CPU lane: 16 threads, an expert 0.138 ms on the CPU vs 0.140 ms over PCIe -> of 0..8 RAM-tier experts the CPU takes 0 0 1 1 2 2 3 3 3
+maya serve: CUDA0: 765 MiB of VRAM free with everything loaded
+maya generate: glm5-next serve (M3.1): GEN <max_new> [keys] <ids>, GENI <max_new> [keys] <embeddings> <ids>; QUIT to end
+glm stat: decode 69.21 ms/tok (14.45 tok/s) | vram hit 77.47% | ram fetches 30.78/tok | disk 27.94 reads/tok in 19.20 waits/tok, 40.36 ms/tok | promotions 44.38/tok | cpu lane 14.75/tok in 2.51 ms/tok | prompt 129.5 ms/tok | vram 3223/3287 ram 3859/3923
+glm io: 6.58 routes/tok read the SSD and ran the CPU lane after it | lane 1.30 ms/tok and read 14.97 ms/tok in them | min(read, lane) 1.28 ms/tok (the most an overlap could save)
+glm stat: decode 84.96 ms/tok (11.77 tok/s) | vram hit 65.27% | ram fetches 48.81/tok | disk 34.05 reads/tok in 24.07 waits/tok, 48.86 ms/tok | promotions 54.61/tok | cpu lane 28.82/tok in 4.69 ms/tok | prompt 108.5 ms/tok | vram 3212/3287 ram 3828/3923
+glm io: 12.73 routes/tok read the SSD and ran the CPU lane after it | lane 2.52 ms/tok and read 26.08 ms/tok in them | min(read, lane) 2.28 ms/tok (the most an overlap could save)
+glm stat: decode 69.60 ms/tok (14.37 tok/s) | vram hit 71.66% | ram fetches 42.08/tok | disk 25.41 reads/tok in 20.27 waits/tok, 36.89 ms/tok | promotions 49.63/tok | cpu lane 23.16/tok in 3.92 ms/tok | prompt 132.9 ms/tok | vram 3197/3287 ram 3833/3923
+glm io: 8.77 routes/tok read the SSD and ran the CPU lane after it | lane 1.83 ms/tok and read 17.43 ms/tok in them | min(read, lane) 1.68 ms/tok (the most an overlap could save)
+glm stat: decode 87.46 ms/tok (11.43 tok/s) | vram hit 64.86% | ram fetches 48.78/tok | disk 35.84 reads/tok in 24.37 waits/tok, 51.19 ms/tok | promotions 55.57/tok | cpu lane 28.79/tok in 4.80 ms/tok | prompt 129.4 ms/tok | vram 3224/3287 ram 3839/3923
+glm io: 12.84 routes/tok read the SSD and ran the CPU lane after it | lane 2.58 ms/tok and read 26.83 ms/tok in them | min(read, lane) 2.40 ms/tok (the most an overlap could save)
+glm stat: decode 87.18 ms/tok (11.47 tok/s) | vram hit 64.39% | ram fetches 49.46/tok | disk 35.41 reads/tok in 24.75 waits/tok, 50.66 ms/tok | promotions 56.08/tok | cpu lane 29.29/tok in 4.89 ms/tok | prompt 129.3 ms/tok | vram 3211/3287 ram 3833/3923
+glm io: 13.36 routes/tok read the SSD and ran the CPU lane after it | lane 2.63 ms/tok and read 27.87 ms/tok in them | min(read, lane) 2.42 ms/tok (the most an overlap could save)
+glm stat: decode 72.38 ms/tok (13.82 tok/s) | vram hit 70.28% | ram fetches 43.46/tok | disk 27.08 reads/tok in 20.94 waits/tok, 39.15 ms/tok | promotions 50.20/tok | cpu lane 24.53/tok in 4.15 ms/tok | prompt 134.6 ms/tok | vram 3193/3287 ram 3844/3923
+glm io: 9.52 routes/tok read the SSD and ran the CPU lane after it | lane 2.01 ms/tok and read 19.07 ms/tok in them | min(read, lane) 1.84 ms/tok (the most an overlap could save)
+glm stat: decode 98.84 ms/tok (10.12 tok/s) | vram hit 60.60% | ram fetches 52.66/tok | disk 42.75 reads/tok in 26.60 waits/tok, 60.52 ms/tok | promotions 58.75/tok | cpu lane 31.96/tok in 5.28 ms/tok | prompt 130.7 ms/tok | vram 3223/3287 ram 3849/3923
+glm io: 15.27 routes/tok read the SSD and ran the CPU lane after it | lane 3.03 ms/tok and read 34.18 ms/tok in them | min(read, lane) 2.84 ms/tok (the most an overlap could save)

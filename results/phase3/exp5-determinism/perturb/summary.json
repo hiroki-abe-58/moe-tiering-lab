@@ -1,0 +1,13 @@
+{
+ "runs_in_order": [
+  "idle-r0=A",
+  "stress-r0=B",
+  "L0idle-r0=C",
+  "L0stress-r0=C",
+  "L0stress-r1=C",
+  "L0idle-r1=C",
+  "stress-r1=B",
+  "idle-r1=B"
+ ],
+ "distinct_output_sets": 3
+}

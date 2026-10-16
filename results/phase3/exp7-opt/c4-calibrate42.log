@@ -1,0 +1,104 @@
+  Loading the model for the measurements (it reads the experts into RAM and VRAM first) ...
+[maya] starting the engine: reading the model's weights ...
+[maya] still starting (20 s) - please wait ...
+    the engine's own split (PCIe share 0.60): 20.6 tok/s
+    PCIe share 0.00: 20.1 tok/s
+    PCIe share 0.10: 22.4 tok/s
+    PCIe share 0.25: 20.2 tok/s
+    PCIe share 0.50: 21.4 tok/s
+    PCIe share 0.75: 19.7 tok/s
+    16 CPU threads: 21.9 tok/s
+    12 CPU threads: 19.7 tok/s
+    11 CPU threads: 17.9 tok/s
+    8 CPU threads: 18.8 tok/s
+    4 CPU threads: 15.1 tok/s
+    confirming against the engine's own settings ...
+    the engine's own disk reads (8 pieces an expert part): 22.3 tok/s
+    4 pieces: 23.7 tok/s
+    2 pieces: 23.0 tok/s
+    confirming the disk reads' size ...
+{
+ "settings": {
+  "STRATA_GLM_PCIE_SHARE": "0.10"
+ },
+ "report": {
+  "default": {
+   "pcie_share": 0.6,
+   "cpu_threads": 16
+  },
+  "share_sweep": {
+   "own": [
+    20.591358064412344
+   ],
+   "0.00": [
+    20.143522598514416
+   ],
+   "0.10": [
+    22.404256808793672
+   ],
+   "0.25": [
+    20.246437101595987
+   ],
+   "0.50": [
+    21.42438697798979
+   ],
+   "0.75": [
+    19.672332708326927
+   ]
+  },
+  "thread_sweep": {
+   "16": [
+    21.887824897400822
+   ],
+   "12": [
+    19.734204927384294
+   ],
+   "11": [
+    17.89158815800509
+   ],
+   "8": [
+    18.844036156994374
+   ],
+   "4": [
+    15.149542554828326
+   ]
+  },
+  "confirm": {
+   "own/16": [
+    20.101133829580075,
+    19.42277927832236,
+    22.568189431740045
+   ],
+   "0.10/16": [
+    22.77255906632508,
+    23.86946386946387,
+    19.99000499750125
+   ]
+  },
+  "chunk_sweep": {
+   "own": [
+    22.287614702860825
+   ],
+   "4": [
+    23.660326438566333
+   ],
+   "2": [
+    22.990570273911093
+   ]
+  },
+  "chunk_confirm": {
+   "own": [
+    22.22762476990935,
+    23.558426738814347,
+    22.997179252232343
+   ],
+   "4": [
+    20.68486288198316,
+    20.706948151743106,
+    23.80022684591212
+   ]
+  },
+  "tok_s": 22.8,
+  "seconds": 676
+ }
+}

@@ -131,6 +131,21 @@ Greedy decoding, 6 fixed prompts x 256 tokens, token ids diffed (`results/phase3
 - Open: the logits at the first divergent token were not compared; one unexplained deviation (first engine start after
   the reboot, tier 26, round 0).
 
+## 7. Where the SSD time goes, and what small reader changes buy (Phase 3, night run)
+
+Sources: `results/phase3/exp6-io/SUMMARY.md`, `results/phase3/exp7-opt/SUMMARY.md`. All screens, mostly 2 rounds per arm.
+
+- During SSD waits the drive delivers ~6 GB/s at every tier (6.06 / 6.02 / 5.93 / 5.81 GB/s at 26 / 32 / 38 / 42 GB; OS counters
+  / engine wait time). Waits are bandwidth-bound; they get shorter with a bigger tier only because fewer experts are read per wait.
+  We did **not** run a raw-read benchmark, so "close to the drive's limit" is a data-sheet-class statement, not a measurement.
+- The rest of a token stays at ~36 ms at every tier (floor ~28 tok/s with no disk wait). It was not decomposed.
+- Overlapping the CPU lane with the SSD reads (helper thread, local patch) gained +0.7% (tier 26) / +0.6% (tier 42); a trace puts the
+  most it could hide at 3.6-3.8% of a token. Reader threads (8 -> 12/16/24): no effect. 4 read chunks per part instead of 8: +2.1%
+  (below Maya's own 3% keep threshold); 16: -3.4%. Promotion knobs: no gain. None of this was proposed upstream.
+- A different CPU/PCIe split gave +7.3% at tier 42 (`STRATA_GLM_CPU_PLAN=011223445`, 2 rounds), and Maya's own calibrator
+  recommended `STRATA_GLM_PCIE_SHARE=0.10` (+8.8% over the engine's 0.60, one sample per setting). My baselines were
+  uncalibrated; this is a per-machine tuning point (run `./maya.sh --calibrate`), not evidence of a defect, and the split changes the tokens (section 6).
+
 ## Not tested
 
 - Logit margins at the divergence points (section 6); a quality suite large enough to detect a 1-2 point change.
