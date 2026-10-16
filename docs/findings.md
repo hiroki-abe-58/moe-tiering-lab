@@ -146,11 +146,28 @@ Sources: `results/phase3/exp6-io/SUMMARY.md`, `results/phase3/exp7-opt/SUMMARY.m
   recommended `STRATA_GLM_PCIE_SHARE=0.10` (+8.8% over the engine's 0.60, one sample per setting). My baselines were
   uncalibrated; this is a per-machine tuning point (run `./maya.sh --calibrate`), not evidence of a defect, and the split changes the tokens (section 6).
 
+## 8. Phase 4: the lane's arithmetic, why starts differ, and where the rest of a token goes
+
+Full write-up with tables: [`results/phase4/SUMMARY.md`](../results/phase4/SUMMARY.md). In short:
+
+- **CPU-lane fidelity.** Against a double-precision reference on 150 real lane calls (42 layers) the stock lane (ggml Q8_K activations, blocks of 256) is 1.73% off, the
+  GPU kernels 1.09%, and the two differ from each other by 1.94%. The lane's error is activation quantisation alone (the down input h dominates). Quantising like the device (blocks of 32)
+  gives 1.09% and 0.063% to the GPU; adding the device's integer steps gives 9.8e-8 median - with ~4% of calls still off by 1e-4..1e-3 because the GPU's `expf` and the CPU's
+  differ in the last bit and flip a rounding tie.
+- **That does not make tokens agree**: the router's top-8 changes in 25-60% of the layers within a few tokens whenever any lane/GPU difference above ~1e-6 exists; tokens part within
+  11-17 tokens of the lane-off run in all variants, and the 42-task quality suite is unchanged. The variants cost 0.5-3.6% decode. Not proposed upstream.
+- **Start-to-start differences are placement, not a race**: same placement -> bit-identical (1762/1762 positions); the VRAM pool varies with free VRAM at start, the split with a near-tie timing,
+  decode re-times it and moves experts in the background. Pinning them gave 70/70 identical stream pairs over 5 starts (and after 30 min idle, and with 300 MiB less free VRAM), at the same speed.
+  A documentation section proposing this recipe is the only upstream proposal.
+- **`STRATA_GLM_PCIE_SHARE=0.10`** (Maya's calibrator's choice) is +8.6% decode over the default split at 42 GB (5 rounds); prefill unchanged.
+- **Where a token goes** (Nsight Systems, 46 tokens, 42 GB): SSD wait 17 ms, PCIe fetch of RAM-tier experts 15 ms, dense compute 8 ms, device idle ~12 ms, CPU lane hidden; with `PCIE_SHARE=0.10` the fetch is 4 ms
+  and the device waits 11.7 ms for the lane. Unbuffered random reads of the expert shard: 6.55 GB/s at queue depth 9.
+
 ## Not tested
 
-- Logit margins at the divergence points (section 6); a quality suite large enough to detect a 1-2 point change.
+- A quality suite large enough to detect a 1-2 point change (logit margins at the divergence points were measured in Phase 4, section 8).
 - Any tier above 42 GB, and any tier above 26 GB while Strata is running.
-- 64K/128K context, DFlash2, vision, Maya-L, multi-GPU, Linux, AMD/HIP.
+- 64K/128K context and long-run soak tests, DFlash2, vision, Maya-L, multi-GPU, Linux, AMD/HIP.
 - A llama.cpp GLM-4.5-Air run (the model is on disk; it is a different model and was not used for any comparison).
 - Anything on the Strata side beyond its stock benchmark. GLM-5.3-Flash is not supported by Strata's maintainers'
   scope (see upstream issues #770, #1191, #2067) and no GLM port to Strata was attempted.

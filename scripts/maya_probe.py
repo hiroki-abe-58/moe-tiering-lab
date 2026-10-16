@@ -133,7 +133,7 @@ def main(argv=None) -> int:
         while True:
             line = p.stdout.readline()
             if not line:
-                raise SystemExit(f"the engine stopped while loading; see {log_path}")
+                raise SystemExit(f"the engine stopped while loading (exit code {p.wait(timeout=30)}); see {log_path}")
             if line.startswith("READY"):
                 break
         load_s = time.time() - t_start

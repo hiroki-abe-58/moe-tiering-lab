@@ -1,0 +1,30 @@
+glm fast: CUDA0 only 410 MiB free once the expert pool's 22.05 GB are written (reserve 700 MiB): 0.34 GB less
+glm prefill: CUDA0 chunks of 32768 tokens (--prefill auto, up to 32768; mixer sub-batches of 2048), borrowing 6484 MB of the expert pool while a prompt runs (activations 5133, weight scratch 96, expert staging 86, prestage 1153: 160 experts); disk landing ring 96 experts (692 MB pinned)
+glm fast: CUDA0 VRAM before the expert pool: 9.18 of 31.84 GB in use - dense weights 6.86, state/KV (32768 ctx) 0.62, activations 0.06, other (context, MTP, scratch, prompt path) 1.65
+glm fast: the expert profile E:\oss\maya-dev\data\expert-profile-glm.bin ranks 13248 (layer, expert) pairs
+glm fast: CUDA0 layers [0,45) expert pool 21.63 GB, 60-101 slots/layer (3267 total)
+glm fast: CUDA0 RAM tier 41.99 GB pinned, 6338 slots
+glm prefill: CUDA0 79% of the experts' bytes are held pinned: the pool lends at most 85% of its slots
+glm fast: CUDA0 warming the expert tiers 10% (6.7 of 67.4 GB, 2 s)
+glm fast: CUDA0 warming the expert tiers 20% (13.5 of 67.4 GB, 4 s)
+glm fast: CUDA0 warming the expert tiers 30% (20.2 of 67.4 GB, 5 s)
+glm fast: CUDA0 warming the expert tiers 40% (26.9 of 67.4 GB, 7 s)
+glm fast: CUDA0 warming the expert tiers 50% (33.7 of 67.4 GB, 9 s)
+glm fast: CUDA0 warming the expert tiers 60% (40.5 of 67.4 GB, 11 s)
+glm fast: CUDA0 warming the expert tiers 70% (47.2 of 67.4 GB, 13 s)
+glm fast: CUDA0 warming the expert tiers 80% (53.9 of 67.4 GB, 15 s)
+glm fast: CUDA0 warming the expert tiers 90% (60.7 of 67.4 GB, 16 s)
+glm fast: CUDA0 warming the expert tiers 100% (67.4 of 67.4 GB, 18 s)
+glm fast: CUDA0 tiers warm: 9471 experts (67.4 GB) in 18 s (3.72 GB/s)
+glm fast: CUDA0 CPU lane activations in 32-value blocks (STRATA_GLM_CPU_ACT) in 42 of 42 layers
+glm fast: CUDA0 CPU lane: 16 threads, an expert 0.195 ms on the CPU vs 0.141 ms over PCIe -> of 0..8 RAM-tier experts the CPU takes 0 0 1 1 1 2 2 3 3
+maya serve: CUDA0: 822 MiB of VRAM free with everything loaded
+maya generate: glm5-next serve (M3.1): GEN <max_new> [keys] <ids>, GENI <max_new> [keys] <embeddings> <ids>; QUIT to end
+glm stat: decode 49.31 ms/tok (20.28 tok/s) | vram hit 76.73% | ram fetches 44.17/tok | disk 12.36 reads/tok in 10.78 waits/tok, 18.77 ms/tok | promotions 42.97/tok | cpu lane 19.38/tok in 5.53 ms/tok | prompt 87.5 ms/tok | vram 3198/3267 ram 6256/6338
+glm stat: decode 57.22 ms/tok (17.48 tok/s) | vram hit 64.28% | ram fetches 68.27/tok | disk 12.43 reads/tok in 13.76 waits/tok, 18.93 ms/tok | promotions 53.73/tok | cpu lane 34.07/tok in 9.59 ms/tok | prompt 70.5 ms/tok | vram 3204/3267 ram 6231/6338
+glm stat: decode 48.05 ms/tok (20.81 tok/s) | vram hit 70.53% | ram fetches 58.01/tok | disk 8.57 reads/tok in 10.52 waits/tok, 13.22 ms/tok | promotions 48.76/tok | cpu lane 28.09/tok in 8.08 ms/tok | prompt 77.4 ms/tok | vram 3179/3267 ram 6246/6338
+glm stat: decode 56.37 ms/tok (17.74 tok/s) | vram hit 65.18% | ram fetches 67.19/tok | disk 12.00 reads/tok in 12.82 waits/tok, 18.28 ms/tok | promotions 53.07/tok | cpu lane 33.25/tok in 9.86 ms/tok | prompt 73.0 ms/tok | vram 3205/3267 ram 6239/6338
+glm fast: CUDA0 CPU lane timed again in decode: an expert 0.258 ms (planned with 0.195) -> RAM-tier experts to the CPU, of 0..8: 0 0 0 1 1 2 2 2 3 (PCIe share 0.75)
+glm stat: decode 57.21 ms/tok (17.48 tok/s) | vram hit 65.23% | ram fetches 76.83/tok | disk 11.74 reads/tok in 13.43 waits/tok, 17.90 ms/tok | promotions 55.96/tok | cpu lane 22.47/tok in 6.61 ms/tok | prompt 77.4 ms/tok | vram 3197/3267 ram 6229/6338
+glm stat: decode 49.37 ms/tok (20.26 tok/s) | vram hit 70.38% | ram fetches 67.12/tok | disk 8.71 reads/tok in 11.16 waits/tok, 13.36 ms/tok | promotions 50.98/tok | cpu lane 18.36/tok in 5.39 ms/tok | prompt 80.2 ms/tok | vram 3173/3267 ram 6236/6338
+glm stat: decode 61.53 ms/tok (16.25 tok/s) | vram hit 62.58% | ram fetches 81.66/tok | disk 13.82 reads/tok in 13.61 waits/tok, 20.93 ms/tok | promotions 57.23/tok | cpu lane 25.58/tok in 7.50 ms/tok | prompt 76.4 ms/tok | vram 3191/3267 ram 6232/6338

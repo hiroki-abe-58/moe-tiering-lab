@@ -1,0 +1,30 @@
+glm fast: CUDA0 only 481 MiB free once the expert pool's 22.05 GB are written (reserve 700 MiB): 0.28 GB less
+glm prefill: CUDA0 chunks of 32768 tokens (--prefill auto, up to 32768; mixer sub-batches of 2048), borrowing 6484 MB of the expert pool while a prompt runs (activations 5133, weight scratch 96, expert staging 86, prestage 1153: 160 experts); disk landing ring 96 experts (692 MB pinned)
+glm fast: CUDA0 VRAM before the expert pool: 9.18 of 31.84 GB in use - dense weights 6.86, state/KV (32768 ctx) 0.62, activations 0.06, other (context, MTP, scratch, prompt path) 1.65
+glm fast: the expert profile E:\oss\maya-dev\data\expert-profile-glm.bin ranks 13248 (layer, expert) pairs
+glm fast: CUDA0 layers [0,45) expert pool 21.70 GB, 60-101 slots/layer (3277 total)
+glm fast: CUDA0 RAM tier 25.99 GB pinned, 3923 slots
+glm prefill: CUDA0 59% of the experts' bytes are held pinned: the pool lends at most 85% of its slots
+glm fast: CUDA0 warming the expert tiers 10% (5.1 of 50.2 GB, 1 s)
+glm fast: CUDA0 warming the expert tiers 20% (10.1 of 50.2 GB, 3 s)
+glm fast: CUDA0 warming the expert tiers 30% (15.1 of 50.2 GB, 4 s)
+glm fast: CUDA0 warming the expert tiers 40% (20.1 of 50.2 GB, 5 s)
+glm fast: CUDA0 warming the expert tiers 50% (25.1 of 50.2 GB, 7 s)
+glm fast: CUDA0 warming the expert tiers 60% (30.2 of 50.2 GB, 8 s)
+glm fast: CUDA0 warming the expert tiers 70% (35.2 of 50.2 GB, 10 s)
+glm fast: CUDA0 warming the expert tiers 80% (40.2 of 50.2 GB, 11 s)
+glm fast: CUDA0 warming the expert tiers 90% (45.2 of 50.2 GB, 12 s)
+glm fast: CUDA0 warming the expert tiers 100% (50.2 of 50.2 GB, 13 s)
+glm fast: CUDA0 tiers warm: 7066 experts (50.2 GB) in 13 s (3.74 GB/s)
+glm fast: CUDA0 CPU lane activations in 32-value blocks (STRATA_GLM_CPU_ACT) in 42 of 42 layers
+glm fast: CUDA0 CPU lane: 16 threads, an expert 0.166 ms on the CPU vs 0.142 ms over PCIe -> of 0..8 RAM-tier experts the CPU takes 0 0 1 1 2 2 3 3 4
+maya serve: CUDA0: 798 MiB of VRAM free with everything loaded
+maya generate: glm5-next serve (M3.1): GEN <max_new> [keys] <ids>, GENI <max_new> [keys] <embeddings> <ids>; QUIT to end
+glm stat: decode 70.05 ms/tok (14.28 tok/s) | vram hit 77.47% | ram fetches 30.72/tok | disk 27.80 reads/tok in 19.64 waits/tok, 40.42 ms/tok | promotions 44.48/tok | cpu lane 14.89/tok in 3.83 ms/tok | prompt 129.7 ms/tok | vram 3210/3277 ram 3851/3923
+glm stat: decode 87.93 ms/tok (11.37 tok/s) | vram hit 64.70% | ram fetches 49.22/tok | disk 35.02 reads/tok in 24.51 waits/tok, 50.46 ms/tok | promotions 55.18/tok | cpu lane 29.16/tok in 7.32 ms/tok | prompt 112.0 ms/tok | vram 3209/3277 ram 3827/3923
+glm stat: decode 75.85 ms/tok (13.18 tok/s) | vram hit 70.07% | ram fetches 43.34/tok | disk 28.53 reads/tok in 21.11 waits/tok, 41.35 ms/tok | promotions 51.05/tok | cpu lane 24.25/tok in 6.22 ms/tok | prompt 133.2 ms/tok | vram 3186/3277 ram 3844/3923
+glm stat: decode 87.93 ms/tok (11.37 tok/s) | vram hit 65.25% | ram fetches 48.22/tok | disk 35.35 reads/tok in 24.36 waits/tok, 50.68 ms/tok | promotions 55.33/tok | cpu lane 28.40/tok in 7.27 ms/tok | prompt 131.7 ms/tok | vram 3204/3277 ram 3819/3923
+glm fast: CUDA0 CPU lane timed again in decode: an expert 0.225 ms (planned with 0.166) -> RAM-tier experts to the CPU, of 0..8: 0 0 1 1 1 2 2 2 3 (PCIe share 0.69)
+glm stat: decode 87.85 ms/tok (11.38 tok/s) | vram hit 65.01% | ram fetches 52.66/tok | disk 34.88 reads/tok in 24.35 waits/tok, 50.12 ms/tok | promotions 55.48/tok | cpu lane 24.52/tok in 6.46 ms/tok | prompt 135.0 ms/tok | vram 3207/3277 ram 3836/3923
+glm stat: decode 72.51 ms/tok (13.79 tok/s) | vram hit 71.04% | ram fetches 46.08/tok | disk 26.45 reads/tok in 20.12 waits/tok, 38.49 ms/tok | promotions 49.04/tok | cpu lane 20.18/tok in 5.30 ms/tok | prompt 134.3 ms/tok | vram 3189/3277 ram 3845/3923
+glm stat: decode 97.03 ms/tok (10.31 tok/s) | vram hit 61.54% | ram fetches 56.75/tok | disk 40.33 reads/tok in 26.29 waits/tok, 57.49 ms/tok | promotions 58.10/tok | cpu lane 27.02/tok in 7.10 ms/tok | prompt 134.6 ms/tok | vram 3210/3277 ram 3828/3923

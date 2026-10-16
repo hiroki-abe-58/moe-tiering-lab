@@ -1,0 +1,1036 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bb99881..4a21eb3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -845,6 +845,12 @@ if(STRATA_NATIVE_EXPERTS)
+     add_executable(native_rows_exact_test src/kernels/cpu/native_rows_exact_test.cpp)
+     target_link_libraries(native_rows_exact_test PRIVATE strata_kernels_cpu)
+     add_test(NAME native_rows_exact_test COMMAND native_rows_exact_test)
++    # the 32-value-activation rows (STRATA_GLM_CPU_ACT=q8_1) against a double-precision reference
++    add_executable(native_a32_test src/kernels/cpu/native_a32_test.cpp)
++    target_link_libraries(native_a32_test PRIVATE strata_kernels_cpu)
++    target_compile_definitions(native_a32_test PRIVATE BENCH_DEV=1)
++    add_test(NAME native_a32_test COMMAND native_a32_test)
++    add_test(NAME native_a32d_test COMMAND native_a32_test q8_1d)
+   endif()
+   if(STRATA_BUILD_TESTS AND (STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP))
+     # the dense GEMV for several conversations at once (mv_nt) against the one-conversation GEMV, bit for bit; the
+diff --git a/include/strata/core/glm_model.hpp b/include/strata/core/glm_model.hpp
+index 79eb17c..aba0b58 100644
+--- a/include/strata/core/glm_model.hpp
++++ b/include/strata/core/glm_model.hpp
+@@ -534,6 +534,8 @@ public:
+     bool fast_warm(std::string& err);                      // load-time: stream every expert into the tiers
+     bool fast_cpu_lane_setup(std::string& err);            // STRATA_GLM_CPU_LANE: the pool, its calibration, the split
+     void fast_cpu_experts(int il, int ne, const uint8_t* const* blob, const float* w, const float* x, float* out);
++    // STRATA_GLM_LANE_AUDIT (dev tool): one lane call's experts on the device, the lane's answer and a double-precision reference
++    void lane_audit(int il, int ne, const uint8_t* blobs, const float* w, const float* x, const float* out_cpu);
+     // the same on `pool` with the rows act / hq / ff / dn, or x3 for an EXL3 pack (a verify window's CPU lanes:
+     // FastState::win_lane, each with its own rows)
+     void lane_experts(glmfast::Workers& pool, uint8_t* act, uint8_t* hq, float* ff, float* dn, float* x3, int il,
+diff --git a/include/strata/kernels/cpu/iq_avx2.hpp b/include/strata/kernels/cpu/iq_avx2.hpp
+index 4872b55..8f13ba1 100644
+--- a/include/strata/kernels/cpu/iq_avx2.hpp
++++ b/include/strata/kernels/cpu/iq_avx2.hpp
+@@ -27,6 +27,20 @@ bool iq256_rows1_supported(int ggml_type) noexcept;
+ void iq256_rows1(int ggml_type, const uint8_t* w, size_t row_bytes, int n, const void* const* act, int nt,
+                  float* const* out, int r0, int r1);
+ 
++/// 32-value activation blocks (STRATA_GLM_CPU_ACT=q8_1): the device's q8_1 scheme - a scale (amax / 127, FP16-rounded) per 32
++/// values instead of ggml's Q8_K scale per 256.  n values are n / 32 floats (the scales) then n int8 codes
++/// (iq256a32_bytes).  Rows as iq256_rows' (same weight formats except Q4_K / Q5_K); NOT bit-identical to ggml's dot.
++bool iq256a32_supported(int ggml_type) noexcept;
++size_t iq256a32_bytes(int n) noexcept;
++void iq256a32_quantize(const float* x, int n, void* dst) noexcept;
++void iq256a32_rows(int ggml_type, const uint8_t* w, size_t row_bytes, int n, const void* const* act, int nt,
++                   float* const* out, int r0, int r1);
++/// The same with the device's integer steps (IQ2_XXS / IQ2_XS / IQ2_S / IQ3_XXS: the scaled integer sum of each 32-value chunk
++/// truncated as the CUDA/HIP kernels do, glm_fast.cu dw<T>); the other formats are iq256a32_rows'.  Only the order of the
++/// float additions differs from the device.
++void iq256a32d_rows(int ggml_type, const uint8_t* w, size_t row_bytes, int n, const void* const* act, int nt,
++                    float* const* out, int r0, int r1);
++
+ /// out[t][r] = w_r . h[t] for IQ4_NL (type 20) rows against Q8_0 activations (ggml's block_q8_0).
+ /// IQ4_NL is a 32-value-block format, so this does not go through iq256_rows (QK_K blocks, Q8_K acts).
+ void iq4nl256_down_rows(const uint8_t* w, size_t row_bytes, int n, const void* const* hq, int nt,
+diff --git a/include/strata/kernels/cpu/native_expert.hpp b/include/strata/kernels/cpu/native_expert.hpp
+index 76e59e7..f3d3a9f 100644
+--- a/include/strata/kernels/cpu/native_expert.hpp
++++ b/include/strata/kernels/cpu/native_expert.hpp
+@@ -30,8 +30,15 @@ struct NativeFmt {
+     size_t up_off = 0, down_off = 0;    ///< inside the blob
+     size_t bytes = 0;                   ///< the whole blob
+     size_t act_bytes = 0, h_bytes = 0;  ///< quantized activation sizes (n_embd of gu_act, n_ff of d_act)
++    uint8_t a32 = 0;                    ///< 0: ggml's vec_dot_type activations; 1: 32-value blocks; 2: and the device's integer steps (native_fmt_a32)
+ };
+ 
++/// STRATA_GLM_CPU_ACT=q8_1 | q8_1d (off by default): switch `f` to the device's activation scheme - int8 codes with an FP16-rounded
++/// scale per 32 values - when both of its weight types have a kernel for it (the i-quants, AVX2).  The CPU lane's error against
++/// a double-precision reference falls and it agrees with the device's expert far better, but the result is no longer ggml-cpu's
++/// bit for bit.  Returns whether `f` was switched.
++bool native_fmt_a32(NativeFmt& f);
++
+ /// Whether this build has the ggml-cpu path.
+ bool native_experts_available() noexcept;
+ /// Fills `f` for a layer; false (with a reason) when ggml-cpu has no dot product for a type.
+diff --git a/nsys-run.bat b/nsys-run.bat
+new file mode 100644
+index 0000000..3060482
+--- /dev/null
++++ b/nsys-run.bat
+@@ -0,0 +1,3 @@
++@echo off
++rem wraps the engine in an Nsight Systems capture: NSYS_DELAY / NSYS_DURATION (seconds) and NSYS_OUT from the environment
++"C:\Program Files\NVIDIA Corporation\Nsight Systems 2025.5.2\target-windows-x64\nsys.exe" profile --trace=cuda,nvtx --sample=none --cpuctxsw=none --delay=%NSYS_DELAY% --duration=%NSYS_DURATION% --force-overwrite=true -o %NSYS_OUT% "E:\oss\maya-dev\build\strata.exe" %*
+diff --git a/src/core/glm_fast_path.cu b/src/core/glm_fast_path.cu
+index eba7e78..20a6792 100644
+--- a/src/core/glm_fast_path.cu
++++ b/src/core/glm_fast_path.cu
+@@ -1895,7 +1895,8 @@ void Glm5Model::lane_experts(glmfast::Workers& pool, uint8_t* act, uint8_t* hq,
+     FastState* F = fast_;
+     const Glm5Geometry& g = g_;
+     const auto& Ly = F->L[(size_t) il];
+-    const auto& nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::NativeFmt nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::native_fmt_a32(nf);   // STRATA_GLM_CPU_ACT=q8_1: the lane's activations in the device's 32-value blocks
+     namespace kc = strata::kernels::cpu;
+     const int n_ff = g.n_ff_exp, n_embd = g.n_embd;
+     // one job per pool thread: a contiguous run of the call's rows, the experts' gate/up rows end to end (then the
+@@ -2037,7 +2038,8 @@ void Glm5Model::win_cpu_merged(int il, int nb, const gf::MoeRequest* const* rq,
+     FastState* F = fast_;
+     const Glm5Geometry& g = g_;
+     const auto& Ly = F->L[(size_t) il];
+-    const auto& nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::NativeFmt nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::native_fmt_a32(nf);   // STRATA_GLM_CPU_ACT=q8_1: the lane's activations in the device's 32-value blocks
+     namespace kc = strata::kernels::cpu;
+     const int n_ff = g.n_ff_exp, n_embd = g.n_embd, K = g.n_exp_used;
+     auto& C = F->cpu_win;
+@@ -2273,7 +2275,8 @@ void Glm5Model::fast_cpu_experts(int il, int ne, const uint8_t* const* blob, con
+     FastState* F = fast_;
+     const Glm5Geometry& g = g_;
+     const auto& Ly = F->L[(size_t) il];
+-    const auto& nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::NativeFmt nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::native_fmt_a32(nf);   // STRATA_GLM_CPU_ACT=q8_1: the lane's activations in the device's 32-value blocks
+     namespace kc = strata::kernels::cpu;
+     const int n_ff = g.n_ff_exp, n_embd = g.n_embd;
+     lane_experts(*F->cpu_pool, F->cpu_act.data(), F->cpu_hq.data(), F->cpu_ff.data(), F->cpu_dn.data(),
+@@ -2319,6 +2322,283 @@ void Glm5Model::fast_cpu_experts(int il, int ne, const uint8_t* const* blob, con
+             std::fprintf(stderr, "cpu lane verify (%d calls, layer %d): relative L2 error %.5f, worst call %.5f\n", calls, il,
+                          std::sqrt(e2 / n2), worst);
+     }
++    // STRATA_GLM_LANE_AUDIT=<every n-th lane call> (dev tool, off by default): copy this call's experts and input to a
++    // worker that runs them on the device, against a double reference and activation-precision variants (lane_audit)
++    static const int audit_every = [] {
++        const char* v = getenv("STRATA_GLM_LANE_AUDIT");
++        return v ? std::max(0, std::atoi(v)) : 0;
++    }();
++    if (audit_every > 0 && !Ly.exl3 && ne > 0 && ne <= 8) {
++        static const int audit_max = [] {
++            const char* v = getenv("STRATA_GLM_LANE_AUDIT_MAX");
++            return v ? std::max(1, std::atoi(v)) : 200;
++        }();
++        static std::atomic<int> calls{0}, started{0};
++        static std::atomic<bool> busy{false};
++        static std::thread worker;
++        if (calls.fetch_add(1) % audit_every == 0 && started.load() < audit_max && !busy.load()) {
++            if (worker.joinable()) worker.join();
++            busy.store(true);
++            ++started;
++            std::vector<uint8_t> blobs((size_t) ne * nf.bytes);
++            for (int i = 0; i < ne; ++i) std::memcpy(blobs.data() + (size_t) i * nf.bytes, blob[i], nf.bytes);
++            worker = std::thread([this, il, ne, blobs = std::move(blobs), wv = std::vector<float>(w, w + ne),
++                                  xv = std::vector<float>(x, x + n_embd), ov = std::vector<float>(out, out + n_embd)] {
++                lane_audit(il, ne, blobs.data(), wv.data(), xv.data(), ov.data());
++                busy.store(false);
++            });
++        }
++    }
++}
++
++// STRATA_GLM_LANE_AUDIT's worker: one lane call (layer il, ne experts, input x, weights w, the lane's answer out_cpu)
++//  - run on the device (rms_q8 reproduces x as a q8_1, then the fast path's gate/up and down kernels, own stream),
++//  - computed in double from ggml's dequantised rows (the reference, no activation quantisation), and
++//  - emulated with other activation precisions: the dequantised rows against x and h after a quantise-dequantise
++//    round trip in 256-value Q8_K blocks (the lane's), 32-value q8_1 blocks with an FP16 scale (the device's), and finer
++//    blocks.  The integer dots are exact, so these isolate what the activation quantisation alone costs.
++// One JSON line per call to STRATA_GLM_LANE_AUDIT_OUT (default lane-audit.jsonl).
++void Glm5Model::lane_audit(int il, int ne, const uint8_t* blobs, const float* w, const float* x, const float* out_cpu) {
++    FastState* F = fast_;
++    const Glm5Geometry& g = g_;
++    const auto& Ly = F->L[(size_t) il];
++    strata::kernels::cpu::NativeFmt nf = F->cpu_fmt[(size_t) il];
++    strata::kernels::cpu::native_fmt_a32(nf);
++    namespace kc = strata::kernels::cpu;
++    const int E = g.n_embd, FF = g.n_ff_exp;
++    cudaSetDevice(dev_);
++    // ---- the device
++    std::vector<float> og((size_t) E), xg((size_t) E);
++    {
++        cudaStream_t cs;
++        cudaStreamCreateWithFlags(&cs, cudaStreamNonBlocking);
++        float *dh, *dw, *dx, *dout, *dpw;
++        void *dxq, *dhq;
++        uint8_t* dblob;
++        unsigned long long* dpp;
++        int* dflag;
++        cudaMalloc(&dh, (size_t) E * 4);
++        cudaMalloc(&dw, (size_t) E * 4);
++        cudaMalloc(&dx, (size_t) E * 4);
++        cudaMalloc(&dout, (size_t) E * 4);
++        cudaMalloc(&dxq, (size_t) E / 32 * 36);
++        cudaMalloc(&dhq, (size_t) 8 * FF / 32 * 36);
++        cudaMalloc(&dblob, (size_t) ne * nf.bytes);
++        cudaMalloc(&dpp, 8 * sizeof(unsigned long long));
++        cudaMalloc(&dpw, 8 * sizeof(float));
++        cudaMalloc(&dflag, sizeof(int));
++        double ss = 0;
++        for (int i = 0; i < E; ++i) ss += (double) x[i] * x[i];
++        // x = h * rsqrt(mean(h^2) + eps) * wv; wv = sqrt(mean + eps) makes it h itself, and gives the q8_1 of x
++        const float rms = (float) std::sqrt(ss / E + (double) g.norm_eps);
++        std::vector<float> wv((size_t) E, rms);
++        cudaMemcpy(dh, x, (size_t) E * 4, cudaMemcpyHostToDevice);
++        cudaMemcpy(dw, wv.data(), (size_t) E * 4, cudaMemcpyHostToDevice);
++        gf::rms_q8(dh, nullptr, dw, g.norm_eps, E, dx, dxq, cs);
++        cudaMemcpy(dblob, blobs, (size_t) ne * nf.bytes, cudaMemcpyHostToDevice);
++        unsigned long long pp[8] = {};
++        float pw[8] = {};
++        for (int i = 0; i < ne; ++i) {
++            pp[i] = (unsigned long long) (dblob + (size_t) i * nf.bytes);
++            pw[i] = w[i];
++        }
++        cudaMemcpy(dpp, pp, sizeof pp, cudaMemcpyHostToDevice);
++        cudaMemcpy(dpw, pw, sizeof pw, cudaMemcpyHostToDevice);
++        cudaMemset(dflag, 0, sizeof(int));
++        gf::MoeDev amd = F->md;
++        amd.plan_ptr = dpp;
++        amd.plan_w = dpw;
++        amd.cpu_flag = dflag;
++        gf::moe_gate_up(Ly.gu_type, amd, ne, E, FF, g.swiglu_exp, dxq, dhq, nullptr, 0, nullptr, 0, nullptr, cs);
++        gf::moe_down(Ly.d_type, amd, ne, E, FF, Ly.down_off, dhq, nullptr, dout, cs);
++        cudaMemcpyAsync(og.data(), dout, (size_t) E * 4, cudaMemcpyDeviceToHost, cs);
++        cudaMemcpyAsync(xg.data(), dx, (size_t) E * 4, cudaMemcpyDeviceToHost, cs);
++        cudaStreamSynchronize(cs);
++        cudaFree(dh); cudaFree(dw); cudaFree(dx); cudaFree(dout); cudaFree(dxq); cudaFree(dhq); cudaFree(dblob);
++        cudaFree(dpp); cudaFree(dpw); cudaFree(dflag);
++        cudaStreamDestroy(cs);
++    }
++    // ---- the host: reference and activation-precision variants
++    // formats of an activation vector v (n values) after a quantise-dequantise round trip: 0 exact, 1 the lane's own
++    // quantiser (ggml; Q8_K, 256-value blocks), 2/3 blocks of 128/64 with an FP32 scale, 4 q8_1 blocks of 32 with an FP16
++    // scale (the device's), 5/6/7 blocks of 32/16/8 with an FP32 scale, 8 the lane's quantiser twice (the second on the
++    // first's residual: two integer dots)
++    constexpr int NV = 9;
++    const char* const vname[NV] = {"exact", nf.a32 ? "lane32" : "K256", "b128", "b64", "q81", "b32", "b16", "b8",
++                                   nf.a32 ? "lane32x2" : "K256x2"};
++    const auto qdq = [](const float* v, int n, int blk, bool half_scale, float* o) {
++        for (int b = 0; b < n; b += blk) {
++            float amax = 0.0f;
++            for (int j = 0; j < blk; ++j) amax = std::max(amax, std::fabs(v[b + j]));
++            if (amax == 0.0f) {
++                for (int j = 0; j < blk; ++j) o[b + j] = 0.0f;
++                continue;
++            }
++            const float d = std::min(amax / 127.0f, 65504.0f);
++            const float ds = half_scale ? ggml_fp16_to_fp32(ggml_fp32_to_fp16(d)) : d;
++            for (int j = 0; j < blk; ++j) o[b + j] = std::max(-127.0f, std::min(127.0f, std::round(v[b + j] / d))) * ds;
++        }
++    };
++    const auto lane_qdq = [&](const float* v, int n, bool is_x, float* o) {   // the lane's own quantiser, dequantised
++        std::vector<uint8_t> q(kc::kNativeActBytes);
++        if (is_x) kc::native_quant_act(nf, v, q.data()); else kc::native_quant_h(nf, v, q.data());
++        const ggml_type at = (ggml_type) (is_x ? nf.gu_act : nf.d_act);
++        if (nf.a32) {   // the lane's 32-value form: n / 32 float scales, then n int8 codes
++            const float* d = (const float*) q.data();
++            const int8_t* c = (const int8_t*) (d + n / 32);
++            for (int j = 0; j < n; ++j) o[j] = d[j / 32] * (float) c[j];
++        } else if (at == GGML_TYPE_Q8_K) {   // (this ggml has no to_float for it): { float d; int8 qs[256]; int16 bsums[16] }
++            for (int b = 0; b < n / 256; ++b) {
++                const uint8_t* blk = q.data() + (size_t) b * (is_x ? nf.act_bytes : nf.h_bytes) / (size_t) (n / 256);
++                float d;
++                std::memcpy(&d, blk, 4);
++                for (int j = 0; j < 256; ++j) o[(size_t) b * 256 + j] = d * (float) (int8_t) blk[4 + j];
++            }
++        } else if (ggml_get_type_traits(at)->to_float != nullptr) {
++            ggml_get_type_traits(at)->to_float(q.data(), o, n);
++        } else {
++            std::memcpy(o, v, (size_t) n * 4);   // (unknown activation format: reported as exact)
++        }
++    };
++    const auto variants = [&](const float* v, int n, bool is_x, std::vector<float>* o) {
++        for (int k = 0; k < NV; ++k) o[k].assign((size_t) n, 0.0f);
++        std::memcpy(o[0].data(), v, (size_t) n * 4);
++        lane_qdq(v, n, is_x, o[1].data());
++        qdq(v, n, 128, false, o[2].data());
++        qdq(v, n, 64, false, o[3].data());
++        qdq(v, n, 32, true, o[4].data());
++        qdq(v, n, 32, false, o[5].data());
++        qdq(v, n, 16, false, o[6].data());
++        qdq(v, n, 8, false, o[7].data());
++        std::vector<float> res((size_t) n), r2((size_t) n);
++        for (int j = 0; j < n; ++j) res[(size_t) j] = v[j] - o[1][(size_t) j];
++        lane_qdq(res.data(), n, is_x, r2.data());
++        for (int j = 0; j < n; ++j) o[8][(size_t) j] = o[1][(size_t) j] + r2[(size_t) j];
++    };
++    struct Combo { std::string name; int xv, hv; };
++    std::vector<Combo> combos;
++    combos.push_back({"ref", 0, 0});
++    for (int f = 1; f < NV; ++f) combos.push_back({std::string("x_") + vname[f], f, 0});
++    for (int f = 1; f < NV; ++f) combos.push_back({std::string("h_") + vname[f], 0, f});
++    for (int f = 1; f < NV; ++f) combos.push_back({std::string("xh_") + vname[f], f, f});
++    for (int f = 2; f < NV; ++f) combos.push_back({std::string("xlane_h_") + vname[f], 1, f});
++    const int NC = (int) combos.size();
++    int ci_cpu = -1, ci_gpu = -1;
++    for (int k = 0; k < NC; ++k) {
++        if (combos[(size_t) k].name == std::string("xh_") + vname[1]) ci_cpu = k;
++        if (combos[(size_t) k].name == "xh_q81") ci_gpu = k;
++    }
++    const ggml_type_traits* tg = ggml_get_type_traits((ggml_type) Ly.gu_type);
++    const ggml_type_traits* td = ggml_get_type_traits((ggml_type) Ly.d_type);
++    std::vector<float> xs[NV];
++    variants(x, E, true, xs);
++    std::vector<double> hh((size_t) ne * NV * FF);   // [expert][x variant][FF]: the double hidden vector
++    const unsigned nth = 8;
++    const auto par = [&](int rows, const std::function<void(int, int)>& fn) {   // fn(r0, r1) on nth threads
++        std::vector<std::thread> ts;
++        std::atomic<int> next{0};
++        for (unsigned t = 0; t < nth; ++t)
++            ts.emplace_back([&] {
++                for (int r0; (r0 = next.fetch_add(32)) < rows;) fn(r0, std::min(rows, r0 + 32));
++            });
++        for (auto& t : ts) t.join();
++    };
++    std::vector<float> hq_f[8][NV][NV];   // [expert][x variant][h variant]: the quantised-dequantised hidden vector as float
++    for (int i = 0; i < ne; ++i) {
++        const uint8_t* b = blobs + (size_t) i * nf.bytes;
++        par(FF, [&](int r0, int r1) {
++            std::vector<float> row((size_t) E);
++            for (int r = r0; r < r1; ++r) {
++                double gs[NV] = {}, us[NV] = {};
++                tg->to_float(b + (size_t) r * nf.gu_row, row.data(), E);
++                for (int v = 0; v < NV; ++v) for (int c = 0; c < E; ++c) gs[v] += (double) row[(size_t) c] * xs[v][(size_t) c];
++                tg->to_float(b + Ly.gu_bytes + (size_t) r * nf.gu_row, row.data(), E);
++                for (int v = 0; v < NV; ++v) for (int c = 0; c < E; ++c) us[v] += (double) row[(size_t) c] * xs[v][(size_t) c];
++                for (int v = 0; v < NV; ++v) {
++                    const double lim = g.swiglu_exp;
++                    const double gc = std::min(gs[v], lim), uc = std::min(std::max(us[v], -lim), lim);
++                    hh[((size_t) i * NV + v) * FF + r] = gc / (1.0 + std::exp(-gc)) * uc;
++                }
++            }
++        });
++        for (int v = 0; v < NV; ++v) {
++            std::vector<float> hf((size_t) FF);
++            for (int r = 0; r < FF; ++r) hf[(size_t) r] = (float) hh[((size_t) i * NV + v) * FF + r];
++            variants(hf.data(), FF, false, hq_f[i][v]);
++        }
++    }
++    std::vector<std::vector<double>> oc(NC, std::vector<double>((size_t) E, 0.0));
++    par(E, [&](int r0, int r1) {
++        std::vector<float> row((size_t) FF);
++        for (int r = r0; r < r1; ++r) {
++            for (int i = 0; i < ne; ++i) {
++                td->to_float(blobs + (size_t) i * nf.bytes + Ly.down_off + (size_t) r * nf.d_row, row.data(), FF);
++                for (int k = 0; k < NC; ++k) {
++                    double s = 0.0;
++                    if (combos[(size_t) k].hv == 0) {
++                        const double* h = &hh[((size_t) i * NV + combos[(size_t) k].xv) * FF];
++                        for (int j = 0; j < FF; ++j) s += (double) row[(size_t) j] * h[j];
++                    } else {
++                        const float* h = hq_f[i][combos[(size_t) k].xv][combos[(size_t) k].hv].data();
++                        for (int j = 0; j < FF; ++j) s += (double) row[(size_t) j] * h[j];
++                    }
++                    oc[(size_t) k][(size_t) r] += (double) w[i] * s;
++                }
++            }
++        }
++    });
++    // ---- the numbers
++    const std::vector<double>& ref = oc[0];
++    double nr = 0, mr = 0;
++    for (int r = 0; r < E; ++r) {
++        nr += ref[(size_t) r] * ref[(size_t) r];
++        mr = std::max(mr, std::fabs(ref[(size_t) r]));
++    }
++    const auto stat = [&](const char* name, const double* a, const double* b, bool last, std::string& js) {
++        double e2 = 0, ab = 0, aa = 0, bb = 0, mx = 0;
++        for (int r = 0; r < E; ++r) {
++            const double d = a[r] - b[r];
++            e2 += d * d;
++            ab += a[r] * b[r];
++            aa += a[r] * a[r];
++            bb += b[r] * b[r];
++            mx = std::max(mx, std::fabs(d));
++        }
++        char buf[256];
++        std::snprintf(buf, sizeof buf, "\"%s\":{\"l2\":%.6g,\"linf\":%.6g,\"cos\":%.9g}%s", name, std::sqrt(e2 / std::max(bb, 1e-300)),
++                      mx / std::max(mr, 1e-300), ab / std::sqrt(std::max(aa * bb, 1e-300)), last ? "" : ",");
++        js += buf;
++    };
++    std::vector<double> dg((size_t) E), dc((size_t) E);
++    for (int r = 0; r < E; ++r) {
++        dg[(size_t) r] = og[(size_t) r];
++        dc[(size_t) r] = out_cpu[r];
++    }
++    double xa = 0, xr = 0, xrt = 0;
++    for (int r = 0; r < E; ++r) {
++        xa = std::max(xa, (double) std::fabs(x[r]));
++        xr += (double) x[r] * x[r];
++        xrt = std::max(xrt, (double) std::fabs(xg[(size_t) r] - x[r]));
++    }
++    std::string js;
++    char head[256];
++    std::snprintf(head, sizeof head, "{\"layer\":%d,\"ne\":%d,\"types\":[%d,%d],\"x_amax\":%.6g,\"x_rms\":%.6g,\"x_roundtrip_max\":%.3g,\"ref_amax\":%.6g,\"stats\":{",
++                  il, ne, Ly.gu_type, Ly.d_type, xa, std::sqrt(xr / E), xrt, mr);
++    js = head;
++    stat("gpu", dg.data(), ref.data(), false, js);
++    stat("cpu", dc.data(), ref.data(), false, js);
++    stat("gpu_vs_cpu", dg.data(), dc.data(), false, js);
++    stat("gpu_vs_gpu_emul", dg.data(), oc[(size_t) ci_gpu].data(), false, js);
++    stat("cpu_vs_cpu_emul", dc.data(), oc[(size_t) ci_cpu].data(), false, js);
++    for (int k = 1; k < NC; ++k) stat(combos[(size_t) k].name.c_str(), oc[(size_t) k].data(), ref.data(), k == NC - 1, js);
++    js += "}}\n";
++    static std::mutex mu;
++    std::lock_guard<std::mutex> lk(mu);
++    const char* path = getenv("STRATA_GLM_LANE_AUDIT_OUT");
++    if (FILE* f = std::fopen(path ? path : "lane-audit.jsonl", "ab")) {
++        std::fputs(js.c_str(), f);
++        std::fclose(f);
++    }
+ }
+ 
+ // The CPU lane's pool a split's parts share (fast_cpu_lane_setup): made by the first part, found by the later ones -
+@@ -2522,6 +2802,17 @@ bool Glm5Model::fast_cpu_lane_setup(std::string& err) {
+             F->cpu_fmt[(size_t) il] = f;
+         if (il_cal < 0 && F->cpu_fmt[(size_t) il].n_ff > 0) il_cal = il;
+     }
++    if (getenv("STRATA_GLM_CPU_ACT") != nullptr) {   // which layers' lane activations the setting changes
++        int n_a32 = 0, n_all = 0;
++        for (const auto& f0 : F->cpu_fmt) {
++            if (f0.n_ff <= 0 || f0.gu_type == strata::kernels::exl3::kTypeEXL3) continue;
++            kc::NativeFmt f = f0;
++            ++n_all;
++            n_a32 += kc::native_fmt_a32(f) ? 1 : 0;
++        }
++        std::fprintf(stderr, "glm fast: CUDA%d CPU lane activations in 32-value blocks (STRATA_GLM_CPU_ACT) in %d of %d layers\n",
++                     dev_, n_a32, n_all);
++    }
+     if (il_cal < 0) return true;
+     if (const char* ck = getenv("STRATA_GLM_CPU_LANE_CHECK"))   // the check's layer (below)
+         if (std::atoi(ck) > 0 && std::atoi(ck) < (int) F->cpu_fmt.size() && F->cpu_fmt[(size_t) std::atoi(ck)].n_ff > 0)
+@@ -5035,6 +5326,25 @@ bool Glm5Model::fast_moe_experts(int il, const MoeIo& io, bool pred, int n_ah, c
+         gf::moe_cpu_wait(md, g.n_embd, io.ffn, s);
+         if (F->prof_on) F->mark("moe_cpu_wait");
+     }
++    // STRATA_GLM_DUMP_FFN=<file> (dev tool): the first STRATA_GLM_DUMP_FFN_N (126) layer calls' FFN input x and the layer's
++    // routed + shared expert output, as binary records {int32 layer, float x[n_embd], float ffn[n_embd]}
++    static const char* dump_ffn = getenv("STRATA_GLM_DUMP_FFN");
++    if (dump_ffn != nullptr && dump_ffn[0] && !Ly.exl3) {
++        static std::atomic<int> dumped{0};
++        static const int dump_lim = getenv("STRATA_GLM_DUMP_FFN_N") ? std::atoi(getenv("STRATA_GLM_DUMP_FFN_N")) : 126;
++        if (dumped.fetch_add(1) < dump_lim) {
++            cudaStreamSynchronize(s);
++            std::vector<float> rec((size_t) 2 * g.n_embd);
++            cudaMemcpy(rec.data(), io.x, (size_t) g.n_embd * sizeof(float), cudaMemcpyDeviceToHost);
++            cudaMemcpy(rec.data() + g.n_embd, io.ffn, (size_t) g.n_embd * sizeof(float), cudaMemcpyDeviceToHost);
++            if (FILE* f = std::fopen(dump_ffn, "ab")) {
++                const int32_t l32 = il;
++                std::fwrite(&l32, sizeof l32, 1, f);
++                std::fwrite(rec.data(), sizeof(float), rec.size(), f);
++                std::fclose(f);
++            }
++        }
++    }
+     if (pf && pf_at == 2) issue_prefetch();
+     if (pf) {
+         std::swap(F->ev_pf, F->ev_pf_prev);   // the next layer waits on THIS layer's prefetch
+@@ -5314,6 +5624,34 @@ bool Glm5Model::fast_token(int32_t token, std::string& err) {
+         err = "glm fast: " + std::to_string(gf::launch_errors()) + " kernel launch(es) failed (see stderr)";
+         return false;
+     }
++    // STRATA_GLM_LOGIT_TRACE=<file> (dev tool, off by default): one JSON line per decoded position - the position, the greedy
++    // token and the four highest logits (id, value) - to read the margin at the position where two runs part
++    static const char* logit_trace = getenv("STRATA_GLM_LOGIT_TRACE");
++    if (logit_trace != nullptr && logit_trace[0]) {
++        cudaSetDevice(tail->dev_);
++        std::vector<float> lg((size_t) g.n_vocab);
++        if (cudaMemcpy(lg.data(), tail->sc_ + tail->sc_logits, lg.size() * sizeof(float), cudaMemcpyDeviceToHost) ==
++            cudaSuccess) {
++            int ti[4] = {-1, -1, -1, -1};
++            float tv[4] = {-INFINITY, -INFINITY, -INFINITY, -INFINITY};
++            for (int i = 0; i < (int) lg.size(); ++i) {
++                if (!(lg[(size_t) i] > tv[3])) continue;
++                int k = 3;
++                for (; k > 0 && lg[(size_t) i] > tv[k - 1]; --k) {
++                    tv[k] = tv[k - 1];
++                    ti[k] = ti[k - 1];
++                }
++                tv[k] = lg[(size_t) i];
++                ti[k] = i;
++            }
++            if (FILE* f = std::fopen(logit_trace, "ab")) {
++                std::fprintf(f, "{\"pos\":%lld,\"tok\":%d,\"top\":[[%d,%.7g],[%d,%.7g],[%d,%.7g],[%d,%.7g]]}\n", (long long) p,
++                             (int) FT->tok_h[0], ti[0], tv[0], ti[1], tv[1], ti[2], tv[2], ti[3], tv[3]);
++                std::fclose(f);
++            }
++        }
++        cudaSetDevice(dev_);
++    }
+     last_tok_ = FT->tok_h[0];
+     last->mtp_hx_pos_ = p;   // head_x: the trunk's hidden state of p (the MTP decode drafts from it)
+     for (Glm5Model* m = this; m != nullptr; m = m->split_next_.get())
+diff --git a/src/kernels/cpu/iq_avx2.cpp b/src/kernels/cpu/iq_avx2.cpp
+index 4a7291d..0781290 100644
+--- a/src/kernels/cpu/iq_avx2.cpp
++++ b/src/kernels/cpu/iq_avx2.cpp
+@@ -218,6 +218,140 @@ inline void row_dot(const uint8_t* row, int nblocks, const block_q8_K* const* y,
+     for (int t = 0; t < NT; ++t) res[t] = Fmt32<TY>::K * hsum_ggml(accf[t]);
+ }
+ 
++// ---- 32-value activation blocks (the device's q8_1 scheme).  The activation is quantised in blocks of 32 values, each
++// with its own scale (amax / 127, rounded to FP16 as the device stores it), instead of ggml's Q8_K blocks of 256 values with
++// one: an outlier then costs the accuracy of 32 values, not 256.  Layout of n values: n / 32 floats (the FP16-rounded
++// scales), then n int8 codes.  The weights are decoded as above; each 32-value chunk's integer sum is converted to float
++// and scaled by d_x * d_y(chunk) (ggml's one scale per 256 values is what this replaces).  NOT bit-identical to ggml's dot.
++template <int TY, int NT>
++inline void row_dot_a32(const uint8_t* row, int nblocks, const float* const* yd, const int8_t* const* yq, float* res) {
++    __m256 accf[NT];
++    for (int t = 0; t < NT; ++t) accf[t] = _mm256_setzero_ps();
++    for (int i = 0; i < nblocks; ++i) {
++        const uint8_t* blk = row + (size_t) i * Fmt32<TY>::bytes;
++        const float dx = h2f(u16(blk));
++        for (int j = 0; j < 4; ++j) {
++            for (int half = 0; half < 2; ++half) {
++                __m256i g, sgn, sc;
++                Fmt32<TY>::decode(blk, j, half, g, sgn, sc);
++                const int c = 8 * i + 2 * j + half;
++                const int off = 256 * i + 64 * j + 32 * half;
++                for (int t = 0; t < NT; ++t) {
++                    const __m256i yv = _mm256_loadu_si256((const __m256i*) (yq[t] + off));
++                    const __m256i ys = _mm256_sign_epi8(yv, sgn);
++                    const __m256i p = _mm256_madd_epi16(_mm256_maddubs_epi16(g, ys), sc);
++                    accf[t] = _mm256_fmadd_ps(_mm256_set1_ps(dx * yd[t][c]), _mm256_cvtepi32_ps(p), accf[t]);
++                }
++            }
++        }
++    }
++    for (int t = 0; t < NT; ++t) res[t] = Fmt32<TY>::K * hsum_ggml(accf[t]);
++}
++
++// ---- the same with the device's integer arithmetic.  The device's i-quant dot truncates each 32-value chunk's scaled integer
++// sum before the float scale (glm_fast.cu dw<T>): IQ2_XXS sumi * ls / 8, IQ3_XXS (ls * sumi + sumi / 2) / 2, IQ2_XS / IQ2_S
++// (sumi0 * ls0 + sumi1 * ls1 + (sumi0 + sumi1) / 2) / 4 (C integer division, toward zero), each chunk's float term
++// d_w * d_y * sumi added to the row's sum.  ggml-cpu (and row_dot_a32) keep the scale in float.  Here the 8 chunks of a block are
++// reduced together (the horizontal sums of their dot products as one vector), the device's integer steps run on all 8 at once and
++// the terms are added in float.  Only the order of the float additions differs from the device.
++inline __m256i div_pow2(__m256i x, int m) {   // x / 2^m, C semantics (toward zero)
++    const __m256i bias = _mm256_and_si256(_mm256_srai_epi32(x, 31), _mm256_set1_epi32((1 << m) - 1));
++    return _mm256_srai_epi32(_mm256_add_epi32(x, bias), m);
++}
++
++template <int TY, int NT>
++inline void row_dot_a32g(const uint8_t* row, int nblocks, const float* const* yd, const int8_t* const* yq, float* res) {
++    static_assert(TY == 16 || TY == 17 || TY == 18 || TY == 22, "formats whose device dot truncates");
++    constexpr bool kTwoScales = TY == 17 || TY == 22;
++    __m256 accf[NT];
++    for (int t = 0; t < NT; ++t) accf[t] = _mm256_setzero_ps();
++    const __m256i ones16 = _mm256_set1_epi16(1);
++    for (int i = 0; i < nblocks; ++i) {
++        const uint8_t* blk = row + (size_t) i * Fmt32<TY>::bytes;
++        const float dx = h2f(u16(blk));
++        alignas(32) int32_t la[8], lb[8];   // the chunks' scales as the device reads them (0..15; IQ2_XXS: 2 * s + 1)
++        __m256i u[NT][2];                   // per token, per group of 4 chunks: [sumi0 of the 4 | sumi1 of the 4]
++        for (int grp = 0; grp < 2; ++grp) {
++            __m256i pc[NT][4];
++            for (int k = 0; k < 4; ++k) {
++                const int j = 2 * grp + (k >> 1), half = k & 1;   // chunk c = 8 * block + 4 * grp + k  (j = c / 2 in the block)
++                __m256i g, sgn, sc;
++                Fmt32<TY>::decode(blk, j, half, g, sgn, sc);
++                const int c = 4 * grp + k;
++                const int s0 = _mm_extract_epi16(_mm256_castsi256_si128(sc), 0);
++                const int s1 = _mm_extract_epi16(_mm256_extracti128_si256(sc, 1), 0);
++                if constexpr (TY == 16) {
++                    la[c] = s0;                 // 2 * (w >> 28) + 1, the device's (aux32 >> 27) | 1
++                } else {
++                    la[c] = (s0 - 1) >> 1;      // the 4-bit scale
++                    lb[c] = (s1 - 1) >> 1;
++                }
++                const int off = 256 * i + 128 * grp + 32 * k;
++                for (int t = 0; t < NT; ++t) {
++                    const __m256i yv = _mm256_loadu_si256((const __m256i*) (yq[t] + off));
++                    pc[t][k] = _mm256_madd_epi16(_mm256_maddubs_epi16(g, _mm256_sign_epi8(yv, sgn)), ones16);
++                }
++            }
++            for (int t = 0; t < NT; ++t)
++                u[t][grp] = _mm256_hadd_epi32(_mm256_hadd_epi32(pc[t][0], pc[t][1]), _mm256_hadd_epi32(pc[t][2], pc[t][3]));
++        }
++        const __m256i LA = _mm256_load_si256((const __m256i*) la);
++        __m256i LB = _mm256_setzero_si256();
++        if constexpr (kTwoScales) LB = _mm256_load_si256((const __m256i*) lb);
++        for (int t = 0; t < NT; ++t) {
++            // hadd(hadd(p0, p1), hadd(p2, p3)) = [S0lo S1lo S2lo S3lo | S0hi S1hi S2hi S3hi] (lo: values 0-15, hi: 16-31)
++            const __m256i s0 = _mm256_permute2x128_si256(u[t][0], u[t][1], 0x20);   // chunks 0..7, first 16 values
++            const __m256i s1 = _mm256_permute2x128_si256(u[t][0], u[t][1], 0x31);   // chunks 0..7, last 16 values
++            __m256i q;
++            if constexpr (TY == 16) {
++                q = div_pow2(_mm256_mullo_epi32(_mm256_add_epi32(s0, s1), LA), 3);
++            } else if constexpr (TY == 18) {
++                const __m256i S = _mm256_add_epi32(s0, s1);
++                q = div_pow2(_mm256_add_epi32(_mm256_mullo_epi32(S, LA), div_pow2(S, 1)), 1);
++            } else {
++                q = div_pow2(_mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(s0, LA), _mm256_mullo_epi32(s1, LB)),
++                                              div_pow2(_mm256_add_epi32(s0, s1), 1)), 2);
++            }
++            const __m256 scale = _mm256_mul_ps(_mm256_set1_ps(dx), _mm256_loadu_ps(yd[t] + 8 * i));
++            accf[t] = _mm256_fmadd_ps(_mm256_cvtepi32_ps(q), scale, accf[t]);
++        }
++    }
++    for (int t = 0; t < NT; ++t) res[t] = hsum_ggml(accf[t]);
++}
++
++template <int TY, int NT, bool DEV>
++void dot_rows_a32x(const uint8_t* w, size_t row_bytes, int n, const void* const* act, float* const* out, int r0, int r1) {
++    const float* yd[NT];
++    const int8_t* yq[NT];
++    for (int t = 0; t < NT; ++t) {
++        yd[t] = (const float*) act[t];
++        yq[t] = (const int8_t*) (yd[t] + n / 32);
++    }
++    float res[NT];
++    for (int r = r0; r < r1; ++r) {
++        if constexpr (DEV && (TY == 16 || TY == 17 || TY == 18 || TY == 22))
++            row_dot_a32g<TY, NT>(w + (size_t) r * row_bytes, n / QK_K, yd, yq, res);
++        else
++            row_dot_a32<TY, NT>(w + (size_t) r * row_bytes, n / QK_K, yd, yq, res);
++        for (int t = 0; t < NT; ++t) out[t][r] = res[t];
++    }
++}
++
++template <int TY, bool DEV>
++void dot_rows_a32_nt(int nt, const uint8_t* w, size_t row_bytes, int n, const void* const* act, float* const* out, int r0,
++                     int r1) {
++    switch (nt) {
++        case 1: dot_rows_a32x<TY, 1, DEV>(w, row_bytes, n, act, out, r0, r1); break;
++        case 2: dot_rows_a32x<TY, 2, DEV>(w, row_bytes, n, act, out, r0, r1); break;
++        case 3: dot_rows_a32x<TY, 3, DEV>(w, row_bytes, n, act, out, r0, r1); break;
++        case 4: dot_rows_a32x<TY, 4, DEV>(w, row_bytes, n, act, out, r0, r1); break;
++        default: for (int t0 = 0; t0 < nt; t0 += 4) {
++            const int k = nt - t0 < 4 ? nt - t0 : 4;
++            dot_rows_a32_nt<TY, DEV>(k, w, row_bytes, n, act + t0, out + t0, r0, r1);
++        }
++    }
++}
++
+ // ---- IQ2_XS (17) with ggml's vectorized sign decode (arch/x86/quants.c, ggml_vec_dot_iq2_xs_q8_K):
+ // the 7-bit sign indices never touch ksigns_iq2xs - the 8th sign bit is reconstructed by parity (two
+ // shifts, a xor and ggml's bit_helper pshufb) and the per-half sign vectors come out of shuffles of one
+@@ -603,6 +737,48 @@ void iq256_rows(int type, const uint8_t* w, size_t row_bytes, int n, const void*
+     }
+ }
+ 
++bool iq256a32_supported(int type) noexcept {
++    return type == 16 || type == 17 || type == 18 || type == 21 || type == 22 || type == 23;
++}
++
++size_t iq256a32_bytes(int n) noexcept { return (size_t) n / 32 * 4 + (size_t) n; }
++
++// The device's q8_1 quantiser (glm_fast.cu q8_1_store_warp) for 32 values at a time: d = min(amax / 127, 65504), code =
++// round(v / d) (halves away from zero, as roundf) clamped to +-127, and the scale kept as the FP16 the device stores
++void iq256a32_quantize(const float* x, int n, void* dst) noexcept {
++    float* d = (float*) dst;
++    int8_t* q = (int8_t*) (d + n / 32);
++    for (int b = 0; b < n / 32; ++b) {
++        const float* v = x + 32 * b;
++        float amax = 0.0f;
++        for (int j = 0; j < 32; ++j) amax = std::fmax(amax, std::fabs(v[j]));
++        const float sc = std::fmin(amax / 127.0f, 65504.0f);
++        d[b] = h2f((uint16_t) _mm_cvtsi128_si32(_mm_cvtps_ph(_mm_set_ss(sc), 0)));
++        for (int j = 0; j < 32; ++j)
++            q[32 * b + j] = amax == 0.0f ? (int8_t) 0 : (int8_t) std::fmax(-127.0f, std::fmin(127.0f, std::round(v[j] / sc)));
++    }
++}
++
++void iq256a32_rows(int type, const uint8_t* w, size_t row_bytes, int n, const void* const* act, int nt, float* const* out,
++                   int r0, int r1) {
++    switch (type) {
++#define CASE(T) case T: dot_rows_a32_nt<T, false>(nt, w, row_bytes, n, act, out, r0, r1); break;
++        CASE(16) CASE(17) CASE(18) CASE(21) CASE(22) CASE(23)
++#undef CASE
++        default: break;
++    }
++}
++
++void iq256a32d_rows(int type, const uint8_t* w, size_t row_bytes, int n, const void* const* act, int nt, float* const* out,
++                    int r0, int r1) {
++    switch (type) {
++#define CASE(T) case T: dot_rows_a32_nt<T, true>(nt, w, row_bytes, n, act, out, r0, r1); break;
++        CASE(16) CASE(17) CASE(18) CASE(21) CASE(22) CASE(23)
++#undef CASE
++        default: break;
++    }
++}
++
+ // ---- IQ4_NL (type 20): 32-value blocks of 18 bytes (f16 d + 16 nibble bytes) against Q8_0 activations.
+ // ggml-cpu's own AVX-2 dot (ggml_vec_dot_iq4_nl_q8_0) is single-token: every token redoes the nibble ->
+ // kvalues_iq4nl pshufb decode and the |w| half of the signed x signed product.  Here both are computed once
+diff --git a/src/kernels/cpu/native_a32_test.cpp b/src/kernels/cpu/native_a32_test.cpp
+new file mode 100644
+index 0000000..2a27310
+--- /dev/null
++++ b/src/kernels/cpu/native_a32_test.cpp
+@@ -0,0 +1,294 @@
++// src/kernels/cpu/native_a32_test.cpp - the 32-value activation rows (STRATA_GLM_CPU_ACT=q8_1, iq_avx2.cpp) against a
++// double-precision reference.  The activation quantiser must produce the device's q8_1 codes and FP16-rounded scales; the
++// rows must equal sum(w . dequantised activation) up to float accumulation, for every format they take, 1-5 tokens and row
++// ranges cut anywhere; a token's answer must not depend on how many tokens are batched with it (bit for bit); and the
++// split-base GLM rows (native_fmt_a32 + native_gu_rows_split / native_down_rows_split) must agree between one token and
++// several.  Synthetic rows (random codes, small normal block scales).  CPU only.
++#include "strata/kernels/cpu/expert_layout.hpp"
++#include "strata/kernels/cpu/iq_avx2.hpp"
++#include "strata/kernels/cpu/native_expert.hpp"
++
++#include "ggml.h"
++#include "ggml-cpu.h"
++
++#include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <random>
++#include <string>
++#include <vector>
++
++namespace {
++
++namespace cpu = strata::kernels::cpu;
++int failures = 0;
++
++std::vector<uint8_t> rand_rows(int type, int n, int rows, std::mt19937& rng) {
++    const ggml_type t = (ggml_type) type;
++    const size_t rb = ggml_row_size(t, n), bb = ggml_type_size(t);
++    std::vector<uint8_t> w(rb * rows);
++    for (auto& b : w) b = (uint8_t) rng();
++    std::uniform_real_distribution<float> ds(0.0005f, 0.02f);
++    for (size_t o = 0; o < w.size(); o += bb) {
++        const ggml_fp16_t d = ggml_fp32_to_fp16(ds(rng));
++        std::memcpy(&w[o], &d, sizeof d);
++    }
++    return w;
++}
++
++std::vector<float> rand_x(int n, std::mt19937& rng) {
++    std::normal_distribution<float> nd(0.0f, 1.0f);
++    std::vector<float> x(n);
++    for (auto& v : x) v = nd(rng) * (rng() % 64 == 0 ? 20.0f : 1.0f);   // some outliers, like real activations
++    return x;
++}
++
++// the quantiser written out again: d = min(amax / 127, 65504) rounded to FP16, code = round(v / d) clamped to +-127
++int check_quantiser(int n, std::mt19937& rng) {
++    const auto x = rand_x(n, rng);
++    std::vector<uint8_t> buf(cpu::iq256a32_bytes(n));
++    cpu::iq256a32_quantize(x.data(), n, buf.data());
++    const float* d = (const float*) buf.data();
++    const int8_t* q = (const int8_t*) (d + n / 32);
++    int bad = 0;
++    for (int b = 0; b < n / 32; ++b) {
++        float amax = 0.0f;
++        for (int j = 0; j < 32; ++j) amax = std::max(amax, std::fabs(x[32 * b + j]));
++        const float sc = std::min(amax / 127.0f, 65504.0f);
++        const float dh = ggml_fp16_to_fp32(ggml_fp32_to_fp16(sc));
++        if (d[b] != dh) ++bad;
++        for (int j = 0; j < 32; ++j) {
++            const int want = amax == 0.0f ? 0 : (int) std::max(-127.0f, std::min(127.0f, std::round(x[32 * b + j] / sc)));
++            if (q[32 * b + j] != want) ++bad;
++        }
++    }
++    return bad;
++}
++
++// rows for nt tokens against the double reference (dequantised weights . dequantised activation)
++double compare(int type, int n, int rows, int nt, std::mt19937& rng, std::vector<float>* first = nullptr) {
++    const auto w = rand_rows(type, n, rows, rng);
++    const size_t rb = ggml_row_size((ggml_type) type, n), ab = cpu::iq256a32_bytes(n);
++    std::vector<uint8_t> a(ab * nt);
++    std::vector<const void*> ap(nt);
++    std::vector<float> got((size_t) nt * rows);
++    std::vector<float*> op(nt);
++    for (int k = 0; k < nt; ++k) {
++        cpu::iq256a32_quantize(rand_x(n, rng).data(), n, a.data() + ab * k);
++        ap[k] = a.data() + ab * k;
++        op[k] = got.data() + (size_t) k * rows;
++    }
++    // two row ranges cut at an odd row, as the pool's jobs do
++    const int cut = rows / 3 + 1;
++    cpu::iq256a32_rows(type, w.data(), rb, n, ap.data(), nt, op.data(), 0, cut);
++    cpu::iq256a32_rows(type, w.data() + cut * rb, rb, n, ap.data(), nt, std::vector<float*>(op).data(), 0, 0);   // (empty)
++    {
++        std::vector<float*> op2(nt);
++        for (int k = 0; k < nt; ++k) op2[k] = op[k] + cut;
++        cpu::iq256a32_rows(type, w.data() + cut * rb, rb, n, ap.data(), nt, op2.data(), 0, rows - cut);
++    }
++    const auto* tr = ggml_get_type_traits((ggml_type) type);
++    std::vector<float> row(n);
++    double worst = 0.0;
++    for (int r = 0; r < rows; ++r) {
++        tr->to_float(w.data() + (size_t) r * rb, row.data(), n);
++        for (int k = 0; k < nt; ++k) {
++            const float* d = (const float*) ap[k];
++            const int8_t* q = (const int8_t*) (d + n / 32);
++            double s = 0.0, sa = 0.0;
++            for (int i = 0; i < n; ++i) {
++                const double p = (double) row[i] * ((double) d[i / 32] * q[i]);
++                s += p;
++                sa += std::fabs(p);
++            }
++            worst = std::max(worst, std::fabs(s - got[(size_t) k * rows + r]) / std::max(sa, 1e-30));
++        }
++    }
++    if (first) *first = got;
++    return worst;
++}
++
++using RowsFn = void (*)(int, const uint8_t*, size_t, int, const void* const*, int, float* const*, int, int);
++
++// the device-integer-steps rows against the plain 32-value rows: the device truncates each chunk's scaled sum, so the two
++// differ by at most the truncation (< 1 unit of the chunk's term, i.e. well under 1e-3 of sum|terms| here) - and the device-
++// steps rows must agree with themselves across row ranges and token counts
++double dev_vs_plain(int type, int n, int rows, int nt, std::mt19937& rng) {
++    const auto w = rand_rows(type, n, rows, rng);
++    const size_t rb = ggml_row_size((ggml_type) type, n), ab = cpu::iq256a32_bytes(n);
++    std::vector<uint8_t> a(ab * nt);
++    std::vector<const void*> ap(nt);
++    std::vector<float> g1((size_t) nt * rows), g2((size_t) nt * rows);
++    std::vector<float*> o1(nt), o2(nt);
++    for (int k = 0; k < nt; ++k) {
++        cpu::iq256a32_quantize(rand_x(n, rng).data(), n, a.data() + ab * k);
++        ap[k] = a.data() + ab * k;
++        o1[k] = g1.data() + (size_t) k * rows;
++        o2[k] = g2.data() + (size_t) k * rows;
++    }
++    cpu::iq256a32_rows(type, w.data(), rb, n, ap.data(), nt, o1.data(), 0, rows);
++    cpu::iq256a32d_rows(type, w.data(), rb, n, ap.data(), nt, o2.data(), 0, rows);
++    // scale of a row's terms: the plain row against |activation| (all positive) is not available, so bound by the largest
++    // magnitude of the row: sqrt(n) * max term would be loose; use the rms of the plain results
++    double rms = 0.0, worst = 0.0;
++    for (float v : g1) rms += (double) v * v;
++    rms = std::sqrt(rms / g1.size());
++    for (size_t i = 0; i < g1.size(); ++i) worst = std::max(worst, std::fabs((double) g1[i] - g2[i]) / std::max(rms, 1e-30));
++    return worst;
++}
++
++int check_batching_fn(RowsFn fn, int type, std::mt19937& rng);
++int check_batching(int type, std::mt19937& rng) { return check_batching_fn(cpu::iq256a32_rows, type, rng); }
++
++// token 0 alone vs token 0 with k-1 others batched with it: bit for bit
++int check_batching_fn(RowsFn fn, int type, std::mt19937& rng) {
++    const int n = 2048, rows = 11;
++    const auto w = rand_rows(type, n, rows, rng);
++    const size_t rb = ggml_row_size((ggml_type) type, n), ab = cpu::iq256a32_bytes(n);
++    std::vector<uint8_t> a(ab * 5);
++    for (int k = 0; k < 5; ++k) cpu::iq256a32_quantize(rand_x(n, rng).data(), n, a.data() + ab * k);
++    std::vector<const void*> ap(5);
++    for (int k = 0; k < 5; ++k) ap[k] = a.data() + ab * k;
++    std::vector<float> one(rows), many((size_t) 5 * rows);
++    float* o1[1] = {one.data()};
++    fn(type, w.data(), rb, n, ap.data(), 1, o1, 0, rows);
++    int bad = 0;
++    for (int nt = 2; nt <= 5; ++nt) {
++        std::vector<float*> om(nt);
++        for (int k = 0; k < nt; ++k) om[k] = many.data() + (size_t) k * rows;
++        fn(type, w.data(), rb, n, ap.data(), nt, om.data(), 0, rows);
++        bad += std::memcmp(one.data(), many.data(), rows * sizeof(float)) != 0;
++    }
++    return bad;
++}
++
++// GLM's split-base path through NativeFmt: nt tokens at once equal each token alone
++int check_native(int gu_type, int d_type, std::mt19937& rng) {
++    cpu::NativeFmt f;
++    std::string err;
++    if (!cpu::native_fmt(gu_type, d_type, 4096, 2048, f, err) || !cpu::native_fmt_a32(f)) {
++        std::printf("  native %s/%s: not switched (%s)\n", ggml_type_name((ggml_type) gu_type), ggml_type_name((ggml_type) d_type),
++                    err.c_str());
++        return 1;
++    }
++    const auto gate = rand_rows(gu_type, 4096, 2048, rng), up = rand_rows(gu_type, 4096, 2048, rng),
++               down = rand_rows(d_type, 2048, 4096, rng);
++    const int nt = 4;
++    std::vector<uint8_t> act(f.act_bytes * nt), hq(f.h_bytes * nt);
++    std::vector<float> ff((size_t) nt * 2048), ff1((size_t) nt * 2048), dn((size_t) nt * 4096), dn1((size_t) nt * 4096);
++    std::vector<const void*> ap(nt), hp(nt);
++    std::vector<float*> fp(nt), dp(nt);
++    for (int k = 0; k < nt; ++k) {
++        cpu::native_quant_act(f, rand_x(4096, rng).data(), act.data() + f.act_bytes * k);
++        ap[k] = act.data() + f.act_bytes * k;
++        fp[k] = ff.data() + (size_t) k * 2048;
++        dp[k] = dn.data() + (size_t) k * 4096;
++    }
++    for (int r0 = 0; r0 < 2048; r0 += 683)
++        cpu::native_gu_rows_split(f, gate.data(), up.data(), ap.data(), nt, fp.data(), r0, std::min(2048, r0 + 683), 10.0f);
++    for (int k = 0; k < nt; ++k) {
++        cpu::native_quant_h(f, ff.data() + (size_t) k * 2048, hq.data() + f.h_bytes * k);
++        hp[k] = hq.data() + f.h_bytes * k;
++    }
++    for (int r0 = 0; r0 < 4096; r0 += 1500)
++        cpu::native_down_rows_split(f, down.data(), hp.data(), nt, dp.data(), r0, std::min(4096, r0 + 1500));
++    int bad = 0;
++    for (int k = 0; k < nt; ++k) {
++        float* o1 = ff1.data() + (size_t) k * 2048;
++        float* p1 = dn1.data() + (size_t) k * 4096;
++        cpu::native_gu_rows_split(f, gate.data(), up.data(), &ap[k], 1, &o1, 0, 2048, 10.0f);
++        cpu::native_down_rows_split(f, down.data(), &hp[k], 1, &p1, 0, 4096);
++        bad += std::memcmp(o1, ff.data() + (size_t) k * 2048, 2048 * sizeof(float)) != 0;
++        bad += std::memcmp(p1, dn.data() + (size_t) k * 4096, 4096 * sizeof(float)) != 0;
++    }
++    return bad;
++}
++
++
++// single-thread timing of rows: ggml's dot with Q8_K activations vs the 32-value rows (plain, device steps)
++void bench(int type, std::mt19937& rng) {
++    const int n = 6144, rows = 512;
++    const auto w = rand_rows(type, n, rows, rng);
++    const size_t rb = ggml_row_size((ggml_type) type, n);
++    const auto* q8k = ggml_get_type_traits_cpu(GGML_TYPE_Q8_K);
++    std::vector<uint8_t> ak(ggml_row_size(GGML_TYPE_Q8_K, n));
++    q8k->from_float(rand_x(n, rng).data(), ak.data(), n);
++    std::vector<uint8_t> a32buf(cpu::iq256a32_bytes(n));
++    cpu::iq256a32_quantize(rand_x(n, rng).data(), n, a32buf.data());
++    const void* ap1[1] = {a32buf.data()};
++    std::vector<float> out(rows);
++    float* op[1] = {out.data()};
++    const auto dot = ggml_get_type_traits_cpu((ggml_type) type)->vec_dot;
++    const auto t = [&](auto&& fn) {
++        double best = 1e9;
++        for (int rep = 0; rep < 7; ++rep) {
++            const auto t0 = std::chrono::steady_clock::now();
++            for (int it = 0; it < 20; ++it) fn();
++            best = std::min(best, std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / (20.0 * rows));
++        }
++        return best;
++    };
++    const double g = t([&] { for (int r = 0; r < rows; ++r) dot(n, &out[r], 0, w.data() + (size_t) r * rb, 0, ak.data(), 0, 1); });
++    const double p = t([&] { cpu::iq256a32_rows(type, w.data(), rb, n, ap1, 1, op, 0, rows); });
++    double d = p;
++#ifdef BENCH_DEV
++    d = t([&] { cpu::iq256a32d_rows(type, w.data(), rb, n, ap1, 1, op, 0, rows); });
++#endif
++    std::printf("  bench %-8s ns/row (n=%d): ggml %.0f  a32 %.0f  a32 device-steps %.0f\n", ggml_type_name((ggml_type) type), n,
++                g * 1000, p * 1000, d * 1000);
++}
++
++}  // namespace
++
++int main(int argc, char** argv) {
++    const char* mode = argc > 1 ? argv[1] : "q8_1";   // q8_1 or q8_1d
++#ifdef _WIN32
++    _putenv_s("STRATA_GLM_CPU_ACT", mode);
++#else
++    setenv("STRATA_GLM_CPU_ACT", mode, 1);
++#endif
++    if (!cpu::cpu_avx2_ok()) {
++        std::printf("native_a32_test: no AVX2 here - skipped\n");
++        return 0;
++    }
++    std::mt19937 rng(12345);
++    if (argc > 2 && std::string(argv[2]) == "bench") {
++        for (int type : {16, 18, 22}) bench(type, rng);
++        return 0;
++    }
++    int qbad = 0;
++    for (int n : {256, 2048, 4096, 6144}) qbad += check_quantiser(n, rng);
++    std::printf("  quantiser: %d codes/scales differ from the device's formula\n", qbad);
++    if (qbad != 0) ++failures;
++    for (int type : {16, 17, 18, 21, 22, 23}) {
++        double worst = 0.0;
++        for (int n : {256, 2048, 4096})
++            for (int nt = 1; nt <= 5; ++nt) worst = std::max(worst, compare(type, n, 13, nt, rng));
++        const int batch = check_batching(type, rng);
++        const int batch_d = check_batching_fn(cpu::iq256a32d_rows, type, rng);
++        double dv = 0.0;
++        for (int nt = 1; nt <= 4; ++nt) dv = std::max(dv, dev_vs_plain(type, 2048, 13, nt, rng));
++        std::printf("  %-8s worst |kernel - double reference| / sum|terms| = %.2e, batching differs %d; device-steps rows: "
++                    "batching differs %d, differ from the plain rows by %.2e of the rms\n",
++                    ggml_type_name((ggml_type) type), worst, batch, batch_d, dv);
++        if (worst > 2e-6 || batch != 0 || batch_d != 0 || dv > 2e-3) ++failures;
++    }
++    for (const auto& p : {std::pair<int, int>{16, 18}, {16, 22}, {18, 18}, {21, 23}}) {
++        const int bad = check_native(p.first, p.second, rng);
++        std::printf("  native gate-up %s / down %s: %d results depend on batching\n", ggml_type_name((ggml_type) p.first),
++                    ggml_type_name((ggml_type) p.second), bad);
++        if (bad != 0) ++failures;
++    }
++    // unsupported formats stay on ggml's activations
++    cpu::NativeFmt k;
++    std::string err;
++    if (cpu::native_fmt(12, 12, 4096, 2048, k, err) && cpu::native_fmt_a32(k)) {
++        std::printf("  Q4_K must stay on ggml's activations\n");
++        ++failures;
++    }
++    std::printf(failures == 0 ? "native_a32_test: OK\n" : "native_a32_test: %d FAILED\n", failures);
++    return failures == 0 ? 0 : 1;
++}
+diff --git a/src/kernels/cpu/native_expert.cpp b/src/kernels/cpu/native_expert.cpp
+index 163c55b..f5c047e 100644
+--- a/src/kernels/cpu/native_expert.cpp
++++ b/src/kernels/cpu/native_expert.cpp
+@@ -199,11 +199,38 @@ bool native_fmt(int gu_type, int d_type, int64_t n_embd, int64_t n_ff, NativeFmt
+     return true;
+ }
+ 
++bool native_fmt_a32(NativeFmt& f) {
++    static const int mode = [] {   // 0 off, 1: q8_1 blocks, 2: and the device's integer steps
++        const char* v = std::getenv("STRATA_GLM_CPU_ACT");
++        const std::string s = v ? v : "";
++        return s == "q8_1" || s == "32" ? 1 : s == "q8_1d" ? 2 : 0;
++    }();
++    if (mode == 0 || f.n_ff <= 0 || !cpu_avx2_ok() || std::getenv("STRATA_NO_IQ256") != nullptr) return false;
++    if (!iq256a32_supported(f.gu_type) || !iq256a32_supported(f.d_type)) return false;
++    if (f.n_embd % 256 != 0 || f.n_ff % 256 != 0) return false;
++    f.a32 = (uint8_t) mode;
++    f.act_bytes = iq256a32_bytes((int) f.n_embd);
++    f.h_bytes = iq256a32_bytes((int) f.n_ff);
++    if (f.act_bytes > kNativeActBytes || f.h_bytes > kNativeHBytes) {
++        f.a32 = 0;
++        return false;
++    }
++    return true;
++}
++
+ void native_quant_act(const NativeFmt& f, const float* x, void* dst) {
++    if (f.a32) {
++        iq256a32_quantize(x, (int) f.n_embd, dst);
++        return;
++    }
+     traits(f.gu_act)->from_float(x, dst, f.n_embd);
+ }
+ 
+ void native_quant_h(const NativeFmt& f, const float* h, void* dst) {
++    if (f.a32) {
++        iq256a32_quantize(h, (int) f.n_ff, dst);
++        return;
++    }
+     traits(f.d_act)->from_float(h, dst, f.n_ff);
+ }
+ 
+@@ -246,7 +273,7 @@ void native_gu_rows_split(const NativeFmt& f, const uint8_t* gate_base, const ui
+     const int n = (int) f.n_embd;
+     const bool clamp = swiglu_limit != std::numeric_limits<float>::infinity();
+     if (r1 > r0) {
+-        if (const RowsFn fn = exact_rows_nt(f.gu_type, nt)) {
++        if (const RowsFn fn = f.a32 ? (f.a32 == 2 ? (RowsFn) iq256a32d_rows : (RowsFn) iq256a32_rows) : exact_rows_nt(f.gu_type, nt)) {
+             // every gate row of the range for all tokens (each row decoded once per group of tokens), then every up
+             // row, then the same epilogue as below on the same values
+             const int nr = r1 - r0;
+@@ -294,7 +321,7 @@ void native_gu_rows_split(const NativeFmt& f, const uint8_t* gate_base, const ui
+ void native_down_rows_split(const NativeFmt& f, const uint8_t* down_base, const void* const* hq,
+                             int nt, float* const* out, int r0, int r1) {
+     if (r1 > r0) {
+-        if (const RowsFn fn = exact_rows_nt(f.d_type, nt)) {
++        if (const RowsFn fn = f.a32 ? (f.a32 == 2 ? (RowsFn) iq256a32d_rows : (RowsFn) iq256a32_rows) : exact_rows_nt(f.d_type, nt)) {
+             thread_local std::vector<float*> o;
+             o.resize((size_t) nt);
+             for (int t = 0; t < nt; ++t) o[(size_t) t] = out[t] + r0;

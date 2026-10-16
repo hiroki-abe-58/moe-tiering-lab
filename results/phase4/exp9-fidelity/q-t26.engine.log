@@ -1,0 +1,64 @@
+glm fast: CUDA0 only 534 MiB free once the expert pool's 22.05 GB are written (reserve 700 MiB): 0.22 GB less
+glm prefill: CUDA0 chunks of 32768 tokens (--prefill auto, up to 32768; mixer sub-batches of 2048), borrowing 6484 MB of the expert pool while a prompt runs (activations 5133, weight scratch 96, expert staging 86, prestage 1153: 160 experts); disk landing ring 96 experts (692 MB pinned)
+glm fast: CUDA0 VRAM before the expert pool: 9.18 of 31.84 GB in use - dense weights 6.86, state/KV (32768 ctx) 0.62, activations 0.06, other (context, MTP, scratch, prompt path) 1.65
+glm fast: the expert profile E:\oss\maya-dev\data\expert-profile-glm.bin ranks 13248 (layer, expert) pairs
+glm fast: CUDA0 layers [0,45) expert pool 21.75 GB, 60-101 slots/layer (3285 total)
+glm fast: CUDA0 RAM tier 25.99 GB pinned, 3923 slots
+glm prefill: CUDA0 60% of the experts' bytes are held pinned: the pool lends at most 85% of its slots
+glm fast: CUDA0 warming the expert tiers 10% (5.1 of 50.3 GB, 1 s)
+glm fast: CUDA0 warming the expert tiers 20% (10.1 of 50.3 GB, 3 s)
+glm fast: CUDA0 warming the expert tiers 30% (15.1 of 50.3 GB, 4 s)
+glm fast: CUDA0 warming the expert tiers 40% (20.1 of 50.3 GB, 5 s)
+glm fast: CUDA0 warming the expert tiers 50% (25.2 of 50.3 GB, 7 s)
+glm fast: CUDA0 warming the expert tiers 60% (30.2 of 50.3 GB, 8 s)
+glm fast: CUDA0 warming the expert tiers 70% (35.2 of 50.3 GB, 10 s)
+glm fast: CUDA0 warming the expert tiers 80% (40.3 of 50.3 GB, 11 s)
+glm fast: CUDA0 warming the expert tiers 90% (45.3 of 50.3 GB, 12 s)
+glm fast: CUDA0 warming the expert tiers 100% (50.3 of 50.3 GB, 14 s)
+glm fast: CUDA0 tiers warm: 7074 experts (50.3 GB) in 14 s (3.68 GB/s)
+glm fast: CUDA0 CPU lane: 16 threads, an expert 0.138 ms on the CPU vs 0.140 ms over PCIe -> of 0..8 RAM-tier experts the CPU takes 0 0 1 1 2 2 3 3 4
+maya serve: CUDA0: 766 MiB of VRAM free with everything loaded
+maya generate: glm5-next serve (M3.1): GEN <max_new> [keys] <ids>, GENI <max_new> [keys] <embeddings> <ids>; QUIT to end
+glm_batch: CUDA0 prompt attention on the tensor cores (mma.sync, 32 heads a block)
+glm stat: decode 97.06 ms/tok (10.30 tok/s) | vram hit 68.42% | ram fetches 38.56/tok | disk 43.33 reads/tok in 26.15 waits/tok, 63.27 ms/tok | promotions 57.15/tok | cpu lane 20.04/tok in 3.87 ms/tok | prompt 59.1 ms/tok | vram 3187/3285 ram 3872/3923
+glm stat: decode 72.85 ms/tok (13.73 tok/s) | vram hit 78.63% | ram fetches 27.97/tok | disk 29.56 reads/tok in 20.17 waits/tok, 43.60 ms/tok | promotions 46.08/tok | cpu lane 11.47/tok in 2.32 ms/tok | prompt 40.2 ms/tok | vram 3201/3285 ram 3866/3923
+glm stat: decode 77.64 ms/tok (12.88 tok/s) | vram hit 71.28% | ram fetches 41.54/tok | disk 28.91 reads/tok in 21.22 waits/tok, 42.57 ms/tok | promotions 50.74/tok | cpu lane 21.90/tok in 4.28 ms/tok | prompt 47.8 ms/tok | vram 3208/3285 ram 3840/3923
+glm stat: decode 67.19 ms/tok (14.88 tok/s) | vram hit 73.61% | ram fetches 39.77/tok | disk 23.02 reads/tok in 18.73 waits/tok, 34.16 ms/tok | promotions 48.04/tok | cpu lane 20.77/tok in 4.08 ms/tok | prompt 87.6 ms/tok | vram 3205/3285 ram 3848/3923
+glm stat: decode 56.71 ms/tok (17.63 tok/s) | vram hit 78.53% | ram fetches 34.06/tok | disk 18.00 reads/tok in 15.09 waits/tok, 26.73 ms/tok | promotions 42.15/tok | cpu lane 16.15/tok in 3.15 ms/tok | prompt 66.2 ms/tok | vram 3185/3285 ram 3855/3923
+glm stat: decode 59.98 ms/tok (16.67 tok/s) | vram hit 76.87% | ram fetches 35.88/tok | disk 19.59 reads/tok in 15.85 waits/tok, 29.12 ms/tok | promotions 43.35/tok | cpu lane 17.91/tok in 3.49 ms/tok | prompt 29.2 ms/tok | vram 3188/3285 ram 3859/3923
+glm stat: decode 64.64 ms/tok (15.47 tok/s) | vram hit 73.92% | ram fetches 41.28/tok | disk 21.11 reads/tok in 17.24 waits/tok, 31.36 ms/tok | promotions 48.32/tok | cpu lane 22.17/tok in 4.26 ms/tok | prompt 27.1 ms/tok | vram 3203/3285 ram 3847/3923
+glm stat: decode 70.38 ms/tok (14.21 tok/s) | vram hit 72.41% | ram fetches 41.35/tok | disk 24.86 reads/tok in 18.65 waits/tok, 36.53 ms/tok | promotions 48.70/tok | cpu lane 22.37/tok in 4.30 ms/tok | prompt 43.9 ms/tok | vram 3204/3285 ram 3843/3923
+glm stat: decode 66.69 ms/tok (15.00 tok/s) | vram hit 74.19% | ram fetches 39.87/tok | disk 22.78 reads/tok in 17.95 waits/tok, 33.66 ms/tok | promotions 48.00/tok | cpu lane 20.58/tok in 3.97 ms/tok | prompt 92.2 ms/tok | vram 3195/3285 ram 3848/3923
+glm stat: decode 59.48 ms/tok (16.81 tok/s) | vram hit 76.36% | ram fetches 37.68/tok | disk 19.10 reads/tok in 14.91 waits/tok, 28.11 ms/tok | promotions 44.10/tok | cpu lane 19.60/tok in 3.78 ms/tok | prompt 31.6 ms/tok | vram 3195/3285 ram 3852/3923
+glm stat: decode 120.96 ms/tok (8.27 tok/s) | vram hit 54.21% | ram fetches 54.50/tok | disk 54.33 reads/tok in 30.50 waits/tok, 78.37 ms/tok | promotions 59.42/tok | cpu lane 34.44/tok in 6.70 ms/tok | prompt 126.8 ms/tok | vram 3211/3285 ram 3849/3923
+glm stat: decode 102.43 ms/tok (9.76 tok/s) | vram hit 60.03% | ram fetches 53.87/tok | disk 42.70 reads/tok in 26.20 waits/tok, 61.93 ms/tok | promotions 57.60/tok | cpu lane 33.09/tok in 6.36 ms/tok | prompt 37.1 ms/tok | vram 3211/3285 ram 3846/3923
+glm stat: decode 95.16 ms/tok (10.51 tok/s) | vram hit 63.15% | ram fetches 50.31/tok | disk 38.40 reads/tok in 25.59 waits/tok, 56.15 ms/tok | promotions 56.35/tok | cpu lane 30.03/tok in 5.80 ms/tok | prompt 50.2 ms/tok | vram 3205/3285 ram 3840/3923
+glm stat: decode 87.46 ms/tok (11.43 tok/s) | vram hit 66.30% | ram fetches 46.97/tok | disk 34.37 reads/tok in 23.29 waits/tok, 50.47 ms/tok | promotions 53.76/tok | cpu lane 27.57/tok in 5.34 ms/tok | prompt 46.7 ms/tok | vram 3200/3285 ram 3841/3923
+glm stat: decode 83.42 ms/tok (11.99 tok/s) | vram hit 65.91% | ram fetches 49.34/tok | disk 31.36 reads/tok in 23.07 waits/tok, 46.24 ms/tok | promotions 54.05/tok | cpu lane 29.02/tok in 5.62 ms/tok | prompt 45.2 ms/tok | vram 3202/3285 ram 3846/3923
+glm stat: decode 78.75 ms/tok (12.70 tok/s) | vram hit 68.20% | ram fetches 46.07/tok | disk 29.18 reads/tok in 20.56 waits/tok, 43.11 ms/tok | promotions 51.73/tok | cpu lane 26.89/tok in 5.28 ms/tok | prompt 95.7 ms/tok | vram 3198/3285 ram 3853/3923
+glm stat: decode 89.19 ms/tok (11.21 tok/s) | vram hit 65.06% | ram fetches 49.06/tok | disk 34.95 reads/tok in 23.18 waits/tok, 51.36 ms/tok | promotions 54.64/tok | cpu lane 29.03/tok in 5.65 ms/tok | prompt 37.5 ms/tok | vram 3206/3285 ram 3840/3923
+glm stat: decode 87.45 ms/tok (11.43 tok/s) | vram hit 64.83% | ram fetches 49.62/tok | disk 33.73 reads/tok in 23.55 waits/tok, 49.57 ms/tok | promotions 54.96/tok | cpu lane 30.18/tok in 5.84 ms/tok | prompt 46.9 ms/tok | vram 3204/3285 ram 3847/3923
+glm stat: decode 96.51 ms/tok (10.36 tok/s) | vram hit 63.76% | ram fetches 47.05/tok | disk 40.16 reads/tok in 25.27 waits/tok, 58.46 ms/tok | promotions 53.84/tok | cpu lane 27.92/tok in 5.45 ms/tok | prompt 54.0 ms/tok | vram 3203/3285 ram 3854/3923
+glm stat: decode 74.72 ms/tok (13.38 tok/s) | vram hit 68.55% | ram fetches 43.06/tok | disk 28.06 reads/tok in 18.81 waits/tok, 41.07 ms/tok | promotions 47.12/tok | cpu lane 26.12/tok in 5.04 ms/tok | prompt 108.7 ms/tok | vram 3195/3285 ram 3853/3923
+glm stat: decode 79.32 ms/tok (12.61 tok/s) | vram hit 70.35% | ram fetches 41.60/tok | disk 30.02 reads/tok in 22.02 waits/tok, 44.18 ms/tok | promotions 50.53/tok | cpu lane 22.64/tok in 4.43 ms/tok | prompt 33.3 ms/tok | vram 3194/3285 ram 3857/3923
+glm stat: decode 70.18 ms/tok (14.25 tok/s) | vram hit 71.77% | ram fetches 41.79/tok | disk 25.04 reads/tok in 18.25 waits/tok, 36.81 ms/tok | promotions 48.00/tok | cpu lane 23.00/tok in 4.45 ms/tok | prompt 37.3 ms/tok | vram 3194/3285 ram 3863/3923
+glm stat: decode 77.29 ms/tok (12.94 tok/s) | vram hit 68.26% | ram fetches 45.89/tok | disk 28.52 reads/tok in 20.95 waits/tok, 42.01 ms/tok | promotions 51.00/tok | cpu lane 26.75/tok in 5.26 ms/tok | prompt 84.6 ms/tok | vram 3194/3285 ram 3859/3923
+glm stat: decode 61.95 ms/tok (16.14 tok/s) | vram hit 76.90% | ram fetches 30.27/tok | disk 22.45 reads/tok in 16.36 waits/tok, 33.26 ms/tok | promotions 39.45/tok | cpu lane 16.09/tok in 3.19 ms/tok | prompt 30.2 ms/tok | vram 3190/3285 ram 3857/3923
+glm stat: decode 70.91 ms/tok (14.10 tok/s) | vram hit 70.79% | ram fetches 44.35/tok | disk 24.92 reads/tok in 18.61 waits/tok, 36.64 ms/tok | promotions 49.69/tok | cpu lane 24.75/tok in 4.80 ms/tok | prompt 33.5 ms/tok | vram 3202/3285 ram 3851/3923
+glm stat: decode 67.39 ms/tok (14.84 tok/s) | vram hit 73.10% | ram fetches 38.25/tok | disk 23.94 reads/tok in 17.88 waits/tok, 35.16 ms/tok | promotions 44.75/tok | cpu lane 19.81/tok in 3.86 ms/tok | prompt 30.2 ms/tok | vram 3192/3285 ram 3850/3923
+glm stat: decode 85.00 ms/tok (11.76 tok/s) | vram hit 68.10% | ram fetches 42.61/tok | disk 33.41 reads/tok in 24.45 waits/tok, 49.06 ms/tok | promotions 51.29/tok | cpu lane 24.00/tok in 4.67 ms/tok | prompt 89.4 ms/tok | vram 3189/3285 ram 3853/3923
+glm stat: decode 75.93 ms/tok (13.17 tok/s) | vram hit 71.98% | ram fetches 38.08/tok | disk 28.67 reads/tok in 22.38 waits/tok, 42.34 ms/tok | promotions 48.00/tok | cpu lane 20.00/tok in 3.99 ms/tok | prompt 24.1 ms/tok | vram 3192/3285 ram 3861/3923
+glm stat: decode 62.59 ms/tok (15.98 tok/s) | vram hit 77.16% | ram fetches 28.22/tok | disk 23.44 reads/tok in 16.89 waits/tok, 34.32 ms/tok | promotions 41.00/tok | cpu lane 14.56/tok in 3.01 ms/tok | prompt 27.5 ms/tok | vram 3187/3285 ram 3864/3923
+glm stat: decode 56.24 ms/tok (17.78 tok/s) | vram hit 76.95% | ram fetches 32.00/tok | disk 18.60 reads/tok in 14.10 waits/tok, 27.81 ms/tok | promotions 38.30/tok | cpu lane 17.60/tok in 3.57 ms/tok | prompt 24.2 ms/tok | vram 3190/3285 ram 3867/3923
+glm stat: decode 65.39 ms/tok (15.29 tok/s) | vram hit 74.39% | ram fetches 38.48/tok | disk 21.86 reads/tok in 19.24 waits/tok, 32.66 ms/tok | promotions 46.76/tok | cpu lane 20.41/tok in 4.04 ms/tok | prompt 57.0 ms/tok | vram 3200/3285 ram 3843/3923
+glm stat: decode 59.77 ms/tok (16.73 tok/s) | vram hit 77.32% | ram fetches 35.46/tok | disk 18.94 reads/tok in 16.93 waits/tok, 28.73 ms/tok | promotions 43.42/tok | cpu lane 18.30/tok in 3.70 ms/tok | prompt 25.4 ms/tok | vram 3191/3285 ram 3851/3923
+glm stat: decode 55.55 ms/tok (18.00 tok/s) | vram hit 75.68% | ram fetches 34.36/tok | disk 17.27 reads/tok in 16.27 waits/tok, 26.12 ms/tok | promotions 40.73/tok | cpu lane 19.09/tok in 3.81 ms/tok | prompt 82.2 ms/tok | vram 3194/3285 ram 3867/3923
+glm stat: decode 54.27 ms/tok (18.43 tok/s) | vram hit 79.86% | ram fetches 31.51/tok | disk 16.79 reads/tok in 15.32 waits/tok, 25.18 ms/tok | promotions 40.00/tok | cpu lane 15.32/tok in 3.14 ms/tok | prompt 64.1 ms/tok | vram 3198/3285 ram 3860/3923
+glm stat: decode 96.27 ms/tok (10.39 tok/s) | vram hit 62.02% | ram fetches 47.52/tok | disk 40.33 reads/tok in 25.57 waits/tok, 58.44 ms/tok | promotions 55.10/tok | cpu lane 27.71/tok in 5.47 ms/tok | prompt 107.7 ms/tok | vram 3216/3285 ram 3843/3923
+glm stat: decode 84.72 ms/tok (11.80 tok/s) | vram hit 66.35% | ram fetches 45.62/tok | disk 32.93 reads/tok in 24.24 waits/tok, 48.41 ms/tok | promotions 53.93/tok | cpu lane 26.14/tok in 5.08 ms/tok | prompt 91.7 ms/tok | vram 3210/3285 ram 3839/3923
+glm stat: decode 30.10 ms/tok (33.22 tok/s) | vram hit 75.30% | ram fetches 20.00/tok | disk 9.50 reads/tok in 7.50 waits/tok, 14.55 ms/tok | promotions 25.00/tok | cpu lane 11.00/tok in 2.30 ms/tok | prompt 76.0 ms/tok | vram 3209/3285 ram 3842/3923
+glm stat: decode 62.58 ms/tok (15.98 tok/s) | vram hit 75.00% | ram fetches 33.40/tok | disk 21.90 reads/tok in 18.20 waits/tok, 32.89 ms/tok | promotions 42.50/tok | cpu lane 17.10/tok in 3.41 ms/tok | prompt 65.1 ms/tok | vram 3194/3285 ram 3840/3923
+glm stat: decode 79.49 ms/tok (12.58 tok/s) | vram hit 67.92% | ram fetches 43.52/tok | disk 30.00 reads/tok in 22.29 waits/tok, 44.35 ms/tok | promotions 51.00/tok | cpu lane 23.95/tok in 4.71 ms/tok | prompt 64.3 ms/tok | vram 3204/3285 ram 3848/3923
+glm stat: decode 69.51 ms/tok (14.39 tok/s) | vram hit 64.29% | ram fetches 37.50/tok | disk 28.50 reads/tok in 17.25 waits/tok, 41.51 ms/tok | promotions 42.00/tok | cpu lane 23.25/tok in 4.61 ms/tok | prompt 86.0 ms/tok | vram 3213/3285 ram 3835/3923
+glm stat: decode 56.86 ms/tok (17.59 tok/s) | vram hit 64.58% | ram fetches 33.00/tok | disk 21.33 reads/tok in 16.33 waits/tok, 31.02 ms/tok | promotions 32.67/tok | cpu lane 19.00/tok in 3.60 ms/tok | prompt 55.3 ms/tok | vram 3199/3285 ram 3839/3923
+glm stat: decode 90.74 ms/tok (11.02 tok/s) | vram hit 62.06% | ram fetches 51.74/tok | disk 35.04 reads/tok in 25.77 waits/tok, 51.58 ms/tok | promotions 56.26/tok | cpu lane 31.75/tok in 6.09 ms/tok | prompt 54.1 ms/tok | vram 3207/3285 ram 3832/3923

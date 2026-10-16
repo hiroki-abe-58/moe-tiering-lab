@@ -1,0 +1,87 @@
+{
+ "order": [
+  "hogA",
+  "hogA",
+  "hogA"
+ ],
+ "common": [
+  "STRATA_GLM_RAM_GB=42",
+  "STRATA_GLM_PROMOTE=0",
+  "STRATA_GLM_CPU_RETIME=0",
+  "STRATA_GLM_CPU_PLAN=001122333"
+ ],
+ "conditions": {
+  "hogA": []
+ },
+ "records": [
+  {
+   "cond": "hogA",
+   "round": 0,
+   "decode_tok_s": 17.372049712457823,
+   "decode_ms_tok": 57.5638671875,
+   "ttft_chat_ms": 1954.3000000000002,
+   "spec_accept": null,
+   "disk_ms_tok": 19.229999999999997,
+   "disk_waits_tok": 13.825,
+   "disk_ms_per_wait": 1.3764625160301809,
+   "disk_share": 0.3340517249183848,
+   "vram_hit_pct": 63.925,
+   "ssd_read_gbs": 1.6660652843867776,
+   "ram_tier_gb": 42.0,
+   "load_s": 37.206477880477905,
+   "prefill_2048": null,
+   "prefill_8192": null,
+   "ttft_8192_ms": null,
+   "min_phys_avail_gb": 7.367580413818359,
+   "min_commit_avail_gb": 21.38287353515625,
+   "max_commit_used_pct": 80.80369463824242,
+   "max_vram_mib": 31431
+  },
+  {
+   "cond": "hogA",
+   "round": 1,
+   "decode_tok_s": 17.45197333634195,
+   "decode_ms_tok": 57.3001953125,
+   "ttft_chat_ms": 1948.25,
+   "spec_accept": null,
+   "disk_ms_tok": 19.235,
+   "disk_waits_tok": 13.825,
+   "disk_ms_per_wait": 1.38142616064602,
+   "disk_share": 0.33568505823633776,
+   "vram_hit_pct": 63.925,
+   "ssd_read_gbs": 1.674801401451336,
+   "ram_tier_gb": 42.0,
+   "load_s": 37.47010540962219,
+   "prefill_2048": null,
+   "prefill_8192": null,
+   "ttft_8192_ms": null,
+   "min_phys_avail_gb": 7.361644744873047,
+   "min_commit_avail_gb": 21.467662811279297,
+   "max_commit_used_pct": 80.72757573714223,
+   "max_vram_mib": 31431
+  },
+  {
+   "cond": "hogA",
+   "round": 2,
+   "decode_tok_s": 17.374615144278792,
+   "decode_ms_tok": 57.555273437500006,
+   "ttft_chat_ms": 1951.55,
+   "spec_accept": null,
+   "disk_ms_tok": 19.299999999999997,
+   "disk_waits_tok": 13.825,
+   "disk_ms_per_wait": 1.3849888461417397,
+   "disk_share": 0.3353283668057729,
+   "vram_hit_pct": 63.925,
+   "ssd_read_gbs": 1.6675234939013426,
+   "ram_tier_gb": 42.0,
+   "load_s": 35.95146584510803,
+   "prefill_2048": null,
+   "prefill_8192": null,
+   "ttft_8192_ms": null,
+   "min_phys_avail_gb": 7.326168060302734,
+   "min_commit_avail_gb": 21.32436752319336,
+   "max_commit_used_pct": 80.85621794710882,
+   "max_vram_mib": 31387
+  }
+ ]
+}

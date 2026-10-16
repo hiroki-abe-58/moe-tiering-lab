@@ -17,3 +17,8 @@ logs/
 *.bin
 *.pack
 raw/
+
+# large per-route / per-layer dumps of the exp9/exp13 runs (their summaries are kept)
+results/phase4/**/route-*
+results/phase4/**/*.ffn
+results/phase4/exp9-fidelity/q-*.trace.jsonl

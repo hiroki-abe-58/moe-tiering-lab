@@ -1,0 +1,12 @@
+30334 kernels, 41 tokens (argmax)
+token span ms: median 45.4  min 31.3  max 72.1  (n=40)
+median device ms per token by group (and as % of the median span):
+  moe_wait        12.89 ms   28.4%
+  moe_fetch        3.97 ms    8.7%
+  moe_cpu_wait    11.69 ms   25.7%
+  experts          1.64 ms    3.6%
+  route            0.97 ms    2.1%
+  dense            7.53 ms   16.6%
+  other            0.01 ms    0.0%
+  sum of kernel time 39.9 ms of a 45.4 ms span
+last third: span median 48.2 ms, moe_wait 15.0, moe_fetch 3.8, moe_cpu_wait 11.5, experts 1.7, route 1.0, dense 7.6, other 0.0
