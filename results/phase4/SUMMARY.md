@@ -96,7 +96,14 @@ Random 1.1 MB reads: queue depth 1 0.99 GB/s, 4 5.75, 9 6.55, 16 6.73, 32 6.82 G
 ## 6. Where the ~36 ms outside the SSD goes (`exp15-nsys/`)
 (see `exp15-nsys/SUMMARY.md`)
 
+## 7. The reference branch on the latest `main` (`exp16-ref-branch/`)
+Branch [`feat/cpu-lane-act-q8_1`](https://github.com/hiroki-abe-58/project-maya/tree/feat/cpu-lane-act-q8_1) on the fork (one commit on `main` @ 797819e = v1.1.13): `STRATA_GLM_CPU_ACT=q8_1` = the `q8_1d` behaviour above
+for IQ2_XXS/XS/S, IQ3_XXS/S and IQ4_XS experts (AVX2), other layers keep ggml's; a new `native_a32_test` checks the quantiser against the device's formula and every format's rows against
+the device's per-chunk formulas computed from the raw block bytes in exact integers (worst difference 8.5e-8 of sum|terms|), batching invariance and the split-base path; `native_rows_exact_test` (ggml parity of the existing
+kernels) still passes. Built on Windows (CUDA 13.1, sm_120), engine decode A/B, 4 interleaved rounds, tier 42 GB: **17.79 tok/s (17.65-17.90) stock vs 17.33 (17.16-17.60) with it, -2.6%**.
+It is a reference, not a proposal (see section 2).
+
 ## What is published, what is not
-Published here: the measurements, the harness, the analysis scripts, the Windows task harness. The engine patches (audit, trace, `q8_1`, `q8_1d`) are not proposed upstream:
-the accuracy gain is real but does not change a token-level result, `q8_1d` costs 2-4% of decode, and `q8_1` is only a cheaper half-step. A reference branch is on the fork
-(see README). The one upstream proposal is documentation (section 3) - see the pull request linked from the README.
+Published here: the measurements, the harness, the analysis scripts, the Windows task harness and the engine debugging patches (`patches/dev-engine-patches.diff`, unreviewed). The
+accuracy variants are not proposed upstream: the accuracy gain is real but does not change a token-level result, and the exact one costs 2-4% of decode. The one upstream proposal is documentation
+(section 3): [mw00/project-maya#224](https://github.com/mw00/project-maya/pull/224).
